@@ -1,0 +1,151 @@
+"""Thread-safe HTTP client for the fixed local tdx-api service."""
+
+from __future__ import annotations
+
+from collections.abc import Callable, Iterable, Mapping
+from threading import Lock, local
+from typing import Any
+
+import requests
+
+from pytdxfeed.errors import TdxApiResponseError, TdxApiTransportError
+
+BASE_URL = "http://127.0.0.1:8080"
+
+
+class TdxApiClient:
+    """Access the raw tdx-api JSON contract with per-thread HTTP sessions."""
+
+    def __init__(
+        self,
+        timeout_sec: float = 10.0,
+        *,
+        session_factory: Callable[[], requests.Session] = requests.Session,
+    ) -> None:
+        timeout = float(timeout_sec)
+        if timeout <= 0:
+            raise ValueError("timeout_sec must be positive")
+        self.timeout_sec = timeout
+        self._session_factory = session_factory
+        self._local = local()
+        self._sessions: list[requests.Session] = []
+        self._sessions_lock = Lock()
+        self._closed = False
+
+    def __enter__(self) -> TdxApiClient:
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        self.close()
+
+    def close(self) -> None:
+        """Close every session created by this client."""
+        with self._sessions_lock:
+            sessions = tuple(self._sessions)
+            self._sessions.clear()
+            self._closed = True
+        for session in sessions:
+            session.close()
+
+    def health(self) -> dict[str, Any]:
+        """Require the exact health response implemented by the pinned service."""
+        payload = self._request_json("GET", "/api/health")
+        if not isinstance(payload, dict):
+            raise TdxApiResponseError("[tdx-api] health response must be an object")
+        if str(payload.get("status") or "").lower() != "healthy":
+            raise TdxApiResponseError(
+                f"[tdx-api] health status is not healthy: {payload}"
+            )
+        return payload
+
+    def kline_all(
+        self,
+        code: str,
+        *,
+        source: str,
+        interval: str,
+        limit: int | None = None,
+    ) -> object:
+        """Return all stock K-lines from the explicit tdx or ths endpoint."""
+        if source not in {"tdx", "ths"}:
+            raise ValueError("source must be 'tdx' or 'ths'")
+        params: dict[str, object] = {"code": _required(code, "code"), "type": interval}
+        if limit is not None and limit > 0:
+            params["limit"] = int(limit)
+        return self._request_json("GET", f"/api/kline-all/{source}", params=params)
+
+    def index_all(
+        self, code: str, *, interval: str, limit: int | None = None
+    ) -> object:
+        """Return all index K-lines."""
+        params: dict[str, object] = {"code": _required(code, "code"), "type": interval}
+        if limit is not None and limit > 0:
+            params["limit"] = int(limit)
+        return self._request_json("GET", "/api/index/all", params=params)
+
+    def batch_quote(self, codes: Iterable[str]) -> object:
+        """Return a raw quote response for at most 50 explicit API codes."""
+        items = [_required(code, "code") for code in codes]
+        if not items:
+            raise ValueError("codes must not be empty")
+        if len(items) > 50:
+            raise ValueError("tdx-api accepts at most 50 quote codes per request")
+        return self._request_json("POST", "/api/batch-quote", json={"codes": items})
+
+    def trade(self, code: str) -> object:
+        """Return recent trades for one API code."""
+        return self._request_json(
+            "GET", "/api/trade", params={"code": _required(code, "code")}
+        )
+
+    def _session(self) -> requests.Session:
+        if self._closed:
+            raise RuntimeError("TdxApiClient is closed")
+        session = getattr(self._local, "session", None)
+        if session is None:
+            session = self._session_factory()
+            self._local.session = session
+            with self._sessions_lock:
+                self._sessions.append(session)
+        return session
+
+    def _request_json(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: Mapping[str, object] | None = None,
+        json: object | None = None,
+    ) -> object:
+        url = BASE_URL + path
+        try:
+            response = self._session().request(
+                method,
+                url,
+                params=params,
+                json=json,
+                timeout=self.timeout_sec,
+            )
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            raise TdxApiTransportError(
+                f"[tdx-api] request failed {url}: {exc}"
+            ) from exc
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            preview = str(getattr(response, "text", ""))[:200]
+            raise TdxApiTransportError(
+                f"[tdx-api] response is not JSON {url}: {preview}"
+            ) from exc
+        if isinstance(payload, dict) and payload.get("code") not in (None, 0):
+            message = payload.get("message") or payload.get("error") or payload
+            raise TdxApiResponseError(f"[tdx-api] {path} returned an error: {message}")
+        return payload
+
+
+def _required(value: object, field: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        raise ValueError(f"{field} must not be empty")
+    return text
