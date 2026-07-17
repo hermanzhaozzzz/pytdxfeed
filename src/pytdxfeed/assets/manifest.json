@@ -1,16 +1,22 @@
 {
   "api_major": 1,
-  "artifact_generation": 1,
+  "artifact_generation": 2,
   "assets": {
     "arm64": {
       "filename": "tdx-api-ea07dccb67ae-darwin-arm64.tar.gz",
-      "sha256": "07bc929fcbd5e4c99c346eb4e4b98dbc336e605b16f1a3c82852998ddb3cb5d1"
+      "sha256": "47d892d74bcec02fed39e700c53460b9602de362d0af39e035413c7d038c0b40"
     },
     "x86_64": {
       "filename": "tdx-api-ea07dccb67ae-darwin-x86_64.tar.gz",
-      "sha256": "0bba193fddcfe4d6547bf3fa7a9892aa55a51234b9274ba2a062c5396a24d9ef"
+      "sha256": "36c9309693c53016e6a19a84a14f23d33015bcae44c28480a4a2254528c5adb2"
     }
   },
+  "patches": [
+    {
+      "filename": "tdx-api-ths-response-validation.patch",
+      "sha256": "6f27e36df68011cd60038b701b155788a7b90ad0cd7522c37144042cd6d17e20"
+    }
+  ],
   "schema_version": 1,
   "upstream_sha": "ea07dccb67aeb92ebde851ac31503b4bf457a318",
   "upstream_url": "https://github.com/oficcejo/tdx-api.git"

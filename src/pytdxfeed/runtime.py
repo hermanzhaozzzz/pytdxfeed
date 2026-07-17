@@ -282,6 +282,7 @@ class _RuntimeManager:
             "artifact_generation": int(asset_manifest["artifact_generation"]),
             "package_version": __version__,
             "upstream_sha": str(asset_manifest["upstream_sha"]),
+            "patches": list(asset_manifest.get("patches") or []),
             "architecture": architecture,
             "asset_filename": filename,
             "asset_sha256": expected_checksum,

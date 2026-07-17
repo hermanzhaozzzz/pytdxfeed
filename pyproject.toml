@@ -1,6 +1,6 @@
 [project]
 name = "pytdxfeed"
-version = "0.1.0"
+version = "0.1.1"
 description = "Private macOS runtime and HTTP client for oficcejo/tdx-api."
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
@@ -29,6 +29,7 @@ include = [
     "/src",
     "/tests",
     "/scripts",
+    "/patches",
     "/README.md",
     "/AGENTS.md",
     "/pyproject.toml",

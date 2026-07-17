@@ -39,14 +39,19 @@ uv run pytest
 uv build
 ```
 
-Regenerate the private macOS assets only when the locked upstream commit is
-changed:
+Regenerate the private macOS assets when the locked upstream commit or reviewed
+private patch set changes:
 
 ```bash
 uv run python scripts/build_assets.py --source /path/to/tdx-api
 ```
 
+The build verifies the exact clean upstream checkout, applies the patches in
+`patches/`, runs their Go tests, and records every patch checksum in the asset
+manifest. Artifact generation 2 turns empty or malformed THS JSONP responses
+into explicit errors instead of crashing the Go HTTP handler; it does not retry
+or switch market-data sources.
+
 The upstream repository currently has no declared license. This repository and
 its derived binaries must remain private/internal until redistribution terms are
 clear.
-

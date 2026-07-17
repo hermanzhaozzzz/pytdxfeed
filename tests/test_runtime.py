@@ -102,6 +102,11 @@ def test_bundled_asset_manifest_and_checksums_are_valid() -> None:
     manifest = runtime._load_asset_manifest()
     asset_root = Path(runtime.__file__).parent / "assets"
     assert manifest["upstream_sha"] == runtime.UPSTREAM_SHA
+    assert manifest["artifact_generation"] == 2
+    assert manifest["patches"][0]["filename"] == (
+        "tdx-api-ths-response-validation.patch"
+    )
+    assert len(manifest["patches"][0]["sha256"]) == 64
     for asset in manifest["assets"].values():
         path = asset_root / asset["filename"]
         assert path.is_file()

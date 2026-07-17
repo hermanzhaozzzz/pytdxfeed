@@ -16,6 +16,9 @@ from pathlib import Path
 
 UPSTREAM_URL = "https://github.com/oficcejo/tdx-api.git"
 UPSTREAM_SHA = "ea07dccb67aeb92ebde851ac31503b4bf457a318"
+ARTIFACT_GENERATION = 2
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+PATCH_FILES = (REPOSITORY_ROOT / "patches" / "tdx-api-ths-response-validation.patch",)
 GO_VERSION_RE = re.compile(r"\bgo(\d+)\.(\d+)(?:\.\d+)?\b")
 ARCHITECTURES = ("arm64", "x86_64")
 GO_ARCHITECTURES = {"arm64": "arm64", "x86_64": "amd64"}
@@ -40,6 +43,8 @@ def main() -> None:
             _run(["git", "clone", "--no-checkout", UPSTREAM_URL, str(source)])
             _run(["git", "-C", str(source), "checkout", "--detach", UPSTREAM_SHA])
         _verify_source(source)
+        _apply_patches(source)
+        _run([str(go), "test", "./extend"], cwd=source)
 
         assets: dict[str, dict[str, str]] = {}
         for architecture in ARCHITECTURES:
@@ -82,9 +87,12 @@ def main() -> None:
     manifest = {
         "schema_version": 1,
         "api_major": 1,
-        "artifact_generation": 1,
+        "artifact_generation": ARTIFACT_GENERATION,
         "upstream_url": UPSTREAM_URL,
         "upstream_sha": UPSTREAM_SHA,
+        "patches": [
+            {"filename": patch.name, "sha256": _sha256(patch)} for patch in PATCH_FILES
+        ],
         "assets": assets,
     }
     (args.output / "manifest.json").write_text(
@@ -115,6 +123,14 @@ def _verify_source(source: Path) -> None:
     ).stdout.strip()
     if status:
         raise SystemExit(f"source checkout is dirty:\n{status}")
+
+
+def _apply_patches(source: Path) -> None:
+    for patch in PATCH_FILES:
+        if not patch.is_file():
+            raise SystemExit(f"required private patch is missing: {patch}")
+        _run(["git", "-C", str(source), "apply", "--check", str(patch)])
+        _run(["git", "-C", str(source), "apply", str(patch)])
 
 
 def _write_deterministic_archive(source: Path, destination: Path) -> None:
