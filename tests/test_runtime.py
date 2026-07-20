@@ -131,6 +131,100 @@ def test_managed_port_change_rejects_unhealthy_target_without_stopping_old_job(
     assert retired == []
 
 
+def test_acceptable_loaded_runtime_waits_for_health_without_redeploying(
+    tmp_path: Path, monkeypatch
+) -> None:
+    manager = _manager(tmp_path)
+    manager.binary_path.parent.mkdir(parents=True)
+    manager.binary_path.touch()
+    manager.static_path.mkdir()
+    manager.runtime_root.mkdir(exist_ok=True)
+    manager.manifest_path.write_text(
+        json.dumps(
+            {
+                "api_major": 1,
+                "artifact_generation": 3,
+                "service_port": 8080,
+                "upstream_sha": runtime.UPSTREAM_SHA,
+            }
+        ),
+        encoding="utf-8",
+    )
+    outcomes: list[object] = [
+        runtime.TdxApiError("temporarily busy"),
+        runtime.TdxApiError("launchd is restarting"),
+        {"status": "healthy"},
+    ]
+
+    def health() -> object:
+        outcome = outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    manager.client.health = health
+    monkeypatch.setattr(
+        manager,
+        "_job_loaded",
+        lambda target: target == manager.service_target,
+    )
+    monkeypatch.setattr(runtime.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(
+        manager,
+        "_deploy",
+        lambda *_args, **_kwargs: pytest.fail("healthy deployment was redeployed"),
+    )
+
+    info = manager._ensure_locked()
+
+    assert info.managed is True
+    assert info.port == 8080
+    assert outcomes == []
+
+
+def test_acceptable_loaded_runtime_health_timeout_never_redeploys(
+    tmp_path: Path, monkeypatch
+) -> None:
+    manager = _manager(tmp_path)
+    manager.binary_path.parent.mkdir(parents=True)
+    manager.binary_path.touch()
+    manager.static_path.mkdir()
+    manager.runtime_root.mkdir(exist_ok=True)
+    manager.manifest_path.write_text(
+        json.dumps(
+            {
+                "api_major": 1,
+                "artifact_generation": 3,
+                "service_port": 8080,
+            }
+        ),
+        encoding="utf-8",
+    )
+    manager.client.health = lambda: (_ for _ in ()).throw(
+        runtime.TdxApiError("still unavailable")
+    )
+    monkeypatch.setattr(
+        manager,
+        "_job_loaded",
+        lambda target: target == manager.service_target,
+    )
+    monkeypatch.setattr(
+        manager,
+        "_wait_until_healthy",
+        lambda: (_ for _ in ()).throw(
+            TdxApiDeploymentError("service recovery timed out")
+        ),
+    )
+    monkeypatch.setattr(
+        manager,
+        "_deploy",
+        lambda *_args, **_kwargs: pytest.fail("healthy deployment was redeployed"),
+    )
+
+    with pytest.raises(TdxApiDeploymentError, match="recovery timed out"):
+        manager._ensure_locked()
+
+
 def test_named_legacy_directory_requires_manifest(tmp_path: Path) -> None:
     manager = _manager(tmp_path)
     source = tmp_path / ".tdx-api/data/database"

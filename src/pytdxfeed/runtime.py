@@ -154,7 +154,9 @@ class _RuntimeManager:
 
         if new_loaded:
             acceptable = self._deployment_acceptable(deployment, asset_manifest)
-            if healthy and acceptable:
+            if acceptable:
+                if not healthy:
+                    self._wait_until_healthy()
                 return self._managed_service_info(deployment)
             if deployed_port != self.port:
                 if healthy:
