@@ -8,6 +8,7 @@ import pytest
 import requests
 
 from pytdxfeed import (
+    DEFAULT_PORT,
     TdxApiClient,
     TdxApiResponseError,
     TdxApiTransportError,
@@ -70,6 +71,27 @@ def test_client_endpoint_contracts() -> None:
         "http://127.0.0.1:8080/api/batch-quote",
     )
     assert session.closed
+
+
+def test_client_uses_configured_local_port() -> None:
+    session = Session([Response({"status": "healthy"})])
+    client = TdxApiClient(port=18080, session_factory=lambda: session)
+
+    client.health()
+
+    assert client.port == 18080
+    assert client.base_url == "http://127.0.0.1:18080"
+    assert session.calls[0][1] == "http://127.0.0.1:18080/api/health"
+
+
+@pytest.mark.parametrize("port", [True, "18080", 0, 65536])
+def test_client_rejects_invalid_port(port: object) -> None:
+    with pytest.raises(ValueError, match="port must be an integer"):
+        TdxApiClient(port=port)  # type: ignore[arg-type]
+
+
+def test_client_default_port_is_8080() -> None:
+    assert TdxApiClient().port == DEFAULT_PORT == 8080
 
 
 def test_business_error_is_not_retried() -> None:

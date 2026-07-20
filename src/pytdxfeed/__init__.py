@@ -1,7 +1,14 @@
 """Shared tdx-api client and macOS runtime."""
 
 from pytdxfeed._version import __version__
-from pytdxfeed.client import BASE_URL, TdxApiClient
+from pytdxfeed.client import (
+    BASE_URL,
+    DEFAULT_PORT,
+    HOST,
+    TdxApiClient,
+    local_base_url,
+    validate_port,
+)
 from pytdxfeed.errors import (
     TdxApiDeploymentError,
     TdxApiError,
@@ -12,6 +19,8 @@ from pytdxfeed.runtime import ServiceInfo, ensure_service
 
 __all__ = [
     "BASE_URL",
+    "DEFAULT_PORT",
+    "HOST",
     "ServiceInfo",
     "TdxApiClient",
     "TdxApiDeploymentError",
@@ -20,4 +29,6 @@ __all__ = [
     "TdxApiTransportError",
     "__version__",
     "ensure_service",
+    "local_base_url",
+    "validate_port",
 ]

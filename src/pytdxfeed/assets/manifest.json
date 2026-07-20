@@ -1,20 +1,24 @@
 {
   "api_major": 1,
-  "artifact_generation": 2,
+  "artifact_generation": 3,
   "assets": {
     "arm64": {
       "filename": "tdx-api-ea07dccb67ae-darwin-arm64.tar.gz",
-      "sha256": "47d892d74bcec02fed39e700c53460b9602de362d0af39e035413c7d038c0b40"
+      "sha256": "8b99f16639c248c3b634f613abfc9d8bd469f5428aa70b6f16ca38c700a7e8c5"
     },
     "x86_64": {
       "filename": "tdx-api-ea07dccb67ae-darwin-x86_64.tar.gz",
-      "sha256": "36c9309693c53016e6a19a84a14f23d33015bcae44c28480a4a2254528c5adb2"
+      "sha256": "9696b1332b826bb0d723da52cd3c558ae529ed31de6a6989f6d9e982659a4a31"
     }
   },
   "patches": [
     {
       "filename": "tdx-api-ths-response-validation.patch",
       "sha256": "6f27e36df68011cd60038b701b155788a7b90ad0cd7522c37144042cd6d17e20"
+    },
+    {
+      "filename": "tdx-api-configurable-port.patch",
+      "sha256": "f1c7d6824ce8f5c486d854a85ffab30ecef053e243b25b017c953b2b505e28a2"
     }
   ],
   "schema_version": 1,

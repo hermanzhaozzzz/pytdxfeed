@@ -21,11 +21,16 @@ from pathlib import Path
 from typing import Any
 
 from pytdxfeed._version import __version__
-from pytdxfeed.client import BASE_URL, TdxApiClient
+from pytdxfeed.client import (
+    DEFAULT_PORT,
+    HOST,
+    TdxApiClient,
+    local_base_url,
+    validate_port,
+)
 from pytdxfeed.errors import TdxApiDeploymentError, TdxApiError
 
-HOST = "127.0.0.1"
-PORT = 8080
+PORT = DEFAULT_PORT
 UPSTREAM_SHA = "ea07dccb67aeb92ebde851ac31503b4bf457a318"
 LAUNCHD_LABEL = "com.hermanzhaozzzz.pytdxfeed.tdx-api"
 LEGACY_VQT_LABEL = "com.hermanzhaozzzz.vqt.tdx-api"
@@ -41,6 +46,7 @@ class ServiceInfo:
     """Description of the healthy local service selected for this process."""
 
     base_url: str
+    port: int
     managed: bool
     launchd_label: str | None
     runtime_root: Path | None
@@ -52,9 +58,11 @@ def ensure_service(
     *,
     timeout_sec: float = 2.0,
     startup_timeout_sec: float = STARTUP_TIMEOUT_SEC,
+    port: int = DEFAULT_PORT,
 ) -> ServiceInfo:
     """Return a healthy service, deploying the shared runtime on macOS if needed."""
-    client = TdxApiClient(timeout_sec=timeout_sec)
+    resolved_port = validate_port(port)
+    client = TdxApiClient(timeout_sec=timeout_sec, port=resolved_port)
     try:
         if platform.system() != "Darwin":
             try:
@@ -64,11 +72,12 @@ def ensure_service(
                     "[pytdxfeed] tdx-api is unavailable; automatic deployment "
                     "is supported only on macOS"
                 ) from exc
-            return _external_service_info()
+            return _external_service_info(resolved_port)
         return _RuntimeManager(
             client=client,
             home_dir=Path.home(),
             startup_timeout_sec=startup_timeout_sec,
+            port=resolved_port,
         ).ensure()
     finally:
         client.close()
@@ -81,6 +90,7 @@ class _RuntimeManager:
         client: TdxApiClient,
         home_dir: Path,
         startup_timeout_sec: float,
+        port: int = DEFAULT_PORT,
     ) -> None:
         self.client = client
         self.home_dir = home_dir.expanduser().resolve()
@@ -104,6 +114,8 @@ class _RuntimeManager:
         self.service_target = f"{self.domain}/{LAUNCHD_LABEL}"
         self.legacy_vqt_target = f"{self.domain}/{LEGACY_VQT_LABEL}"
         self.startup_timeout_sec = float(startup_timeout_sec)
+        self.port = validate_port(port)
+        self.base_url = local_base_url(self.port)
         if self.startup_timeout_sec <= 0:
             raise ValueError("startup_timeout_sec must be positive")
 
@@ -112,7 +124,7 @@ class _RuntimeManager:
         new_loaded = self._job_loaded(self.service_target)
         legacy_loaded = self._job_loaded(self.legacy_vqt_target)
         if not new_loaded and not legacy_loaded and self._healthy():
-            return _external_service_info()
+            return _external_service_info(self.port)
 
         self._prepare_directories()
         with self.lock_path.open("a+", encoding="utf-8") as lock_file:
@@ -128,6 +140,7 @@ class _RuntimeManager:
         healthy = self._healthy()
         asset_manifest = _load_asset_manifest()
         deployment = self._read_json(self.manifest_path)
+        deployed_port = self._deployed_port(deployment)
 
         if legacy_loaded:
             self._seed_legacy_data()
@@ -136,25 +149,36 @@ class _RuntimeManager:
                 old_target=self.legacy_vqt_target,
                 old_plist=self.legacy_vqt_plist_path,
                 remove_legacy_plist=True,
+                old_port=DEFAULT_PORT,
             )
 
         if new_loaded:
             acceptable = self._deployment_acceptable(deployment, asset_manifest)
             if healthy and acceptable:
                 return self._managed_service_info(deployment)
+            if deployed_port != self.port:
+                if healthy:
+                    self._retire_managed_service(deployed_port)
+                    return _external_service_info(self.port)
+                if _port_open(self.port):
+                    raise TdxApiDeploymentError(
+                        f"[pytdxfeed] {HOST}:{self.port} is occupied by an "
+                        "unhealthy unknown process; it will not be reused or terminated"
+                    )
             return self._deploy(
                 asset_manifest,
                 old_target=self.service_target,
                 old_plist=self.plist_path,
                 remove_legacy_plist=False,
+                old_port=deployed_port,
             )
 
         if healthy:
-            return _external_service_info()
-        if _port_open():
+            return _external_service_info(self.port)
+        if _port_open(self.port):
             raise TdxApiDeploymentError(
-                "[pytdxfeed] 127.0.0.1:8080 is occupied by an unhealthy unknown "
-                "process; it will not be reused or terminated"
+                f"[pytdxfeed] {HOST}:{self.port} is occupied by an unhealthy "
+                "unknown process; it will not be reused or terminated"
             )
 
         self._seed_legacy_data()
@@ -163,6 +187,7 @@ class _RuntimeManager:
             old_target=None,
             old_plist=None,
             remove_legacy_plist=False,
+            old_port=None,
         )
 
     def _deployment_acceptable(
@@ -182,6 +207,7 @@ class _RuntimeManager:
         return (
             deployed_api == expected_api
             and deployed_generation >= expected_generation
+            and int(deployment.get("service_port", 0) or 0) == self.port
             and self.binary_path.is_file()
             and self.static_path.is_dir()
         )
@@ -193,6 +219,7 @@ class _RuntimeManager:
         old_target: str | None,
         old_plist: Path | None,
         remove_legacy_plist: bool,
+        old_port: int | None,
     ) -> ServiceInfo:
         old_plist_bytes = _read_bytes(old_plist) if old_plist is not None else None
         with tempfile.TemporaryDirectory(
@@ -206,10 +233,10 @@ class _RuntimeManager:
                 _write_bytes_atomic(self.plist_path, desired_plist, mode=0o644)
                 if old_target is not None and self._job_loaded(old_target):
                     self._launchctl(["bootout", old_target])
-                    self._wait_for_port_release()
-                elif _port_open():
+                    self._wait_for_port_release(old_port or self.port)
+                if _port_open(self.port):
                     raise TdxApiDeploymentError(
-                        "[pytdxfeed] port 8080 became occupied before bootstrap"
+                        f"[pytdxfeed] port {self.port} became occupied before bootstrap"
                     )
                 self._launchctl(["bootstrap", self.domain, str(self.plist_path)])
                 self._launchctl(["kickstart", "-k", self.service_target])
@@ -277,7 +304,7 @@ class _RuntimeManager:
                 _copy_missing_tree(source_data, self.data_path)
 
         deployment = {
-            "schema_version": 1,
+            "schema_version": 2,
             "api_major": int(asset_manifest["api_major"]),
             "artifact_generation": int(asset_manifest["artifact_generation"]),
             "package_version": __version__,
@@ -287,6 +314,7 @@ class _RuntimeManager:
             "asset_filename": filename,
             "asset_sha256": expected_checksum,
             "binary_path": str(self.binary_path),
+            "service_port": self.port,
             "installed_at": int(time.time()),
         }
         _write_json_atomic(self.manifest_path, deployment)
@@ -357,6 +385,7 @@ class _RuntimeManager:
         return {
             "Label": LAUNCHD_LABEL,
             "ProgramArguments": [str(self.binary_path)],
+            "EnvironmentVariables": {"TDX_API_PORT": str(self.port)},
             "WorkingDirectory": str(self.runtime_root),
             "RunAtLoad": True,
             "KeepAlive": True,
@@ -366,14 +395,44 @@ class _RuntimeManager:
             "StandardErrorPath": str(self.stderr_log_path),
         }
 
-    def _wait_for_port_release(self) -> None:
+    def _wait_for_port_release(self, port: int) -> None:
         deadline = time.monotonic() + PORT_RELEASE_TIMEOUT_SEC
-        while _port_open() and time.monotonic() < deadline:
+        while _port_open(port) and time.monotonic() < deadline:
             time.sleep(0.1)
-        if _port_open():
+        if _port_open(port):
             raise TdxApiDeploymentError(
-                "[pytdxfeed] LaunchAgent stopped but port 8080 is still occupied"
+                f"[pytdxfeed] LaunchAgent stopped but port {port} is still occupied"
             )
+
+    def _retire_managed_service(self, deployed_port: int) -> None:
+        """Stop a known managed job before reusing a healthy external service."""
+        self._launchctl(["bootout", self.service_target])
+        self._wait_for_port_release(deployed_port)
+        self.plist_path.unlink(missing_ok=True)
+
+    def _deployed_port(self, deployment: Mapping[str, Any] | None) -> int:
+        """Read the last managed port without guessing from an unknown process."""
+        if deployment is not None:
+            raw = deployment.get("service_port")
+            if isinstance(raw, int) and not isinstance(raw, bool):
+                try:
+                    return validate_port(raw)
+                except ValueError:
+                    pass
+        payload = _read_plist(self.plist_path)
+        environment = payload.get("EnvironmentVariables") if payload else None
+        if isinstance(environment, dict):
+            raw = environment.get("TDX_API_PORT")
+            try:
+                parsed = int(str(raw))
+            except (TypeError, ValueError):
+                pass
+            else:
+                try:
+                    return validate_port(parsed)
+                except ValueError:
+                    pass
+        return DEFAULT_PORT
 
     def _wait_until_healthy(self) -> None:
         deadline = time.monotonic() + self.startup_timeout_sec
@@ -434,7 +493,8 @@ class _RuntimeManager:
 
     def _managed_service_info(self, deployment: Mapping[str, Any]) -> ServiceInfo:
         return ServiceInfo(
-            base_url=BASE_URL,
+            base_url=self.base_url,
+            port=self.port,
             managed=True,
             launchd_label=LAUNCHD_LABEL,
             runtime_root=self.runtime_root,
@@ -443,9 +503,10 @@ class _RuntimeManager:
         )
 
 
-def _external_service_info() -> ServiceInfo:
+def _external_service_info(port: int) -> ServiceInfo:
     return ServiceInfo(
-        base_url=BASE_URL,
+        base_url=local_base_url(port),
+        port=port,
         managed=False,
         launchd_label=None,
         runtime_root=None,
@@ -485,9 +546,10 @@ def _architecture() -> str:
         ) from exc
 
 
-def _port_open() -> bool:
+def _port_open(port: int = DEFAULT_PORT) -> bool:
+    resolved_port = validate_port(port)
     try:
-        with socket.create_connection((HOST, PORT), timeout=0.25):
+        with socket.create_connection((HOST, resolved_port), timeout=0.25):
             return True
     except OSError:
         return False

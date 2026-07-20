@@ -14,12 +14,13 @@ import pytdxfeed.runtime as runtime
 from pytdxfeed import TdxApiDeploymentError
 
 
-def _manager(tmp_path: Path):
+def _manager(tmp_path: Path, *, port: int = runtime.DEFAULT_PORT):
     client = SimpleNamespace(health=lambda: {"status": "healthy"})
     return runtime._RuntimeManager(
         client=client,
         home_dir=tmp_path,
         startup_timeout_sec=1,
+        port=port,
     )
 
 
@@ -46,7 +47,7 @@ def test_newer_generation_is_never_downgraded(tmp_path: Path) -> None:
     manager.binary_path.touch()
     manager.static_path.mkdir()
     assert manager._deployment_acceptable(
-        {"api_major": 1, "artifact_generation": 2},
+        {"api_major": 1, "artifact_generation": 2, "service_port": 8080},
         {"api_major": 1, "artifact_generation": 1},
     )
 
@@ -55,7 +56,7 @@ def test_newer_api_is_rejected(tmp_path: Path) -> None:
     manager = _manager(tmp_path)
     with pytest.raises(TdxApiDeploymentError, match="newer"):
         manager._deployment_acceptable(
-            {"api_major": 2, "artifact_generation": 1},
+            {"api_major": 2, "artifact_generation": 1, "service_port": 8080},
             {"api_major": 1, "artifact_generation": 1},
         )
 
@@ -71,6 +72,63 @@ def test_copy_missing_tree_does_not_overwrite(tmp_path: Path) -> None:
     runtime._copy_missing_tree(source, destination)
     assert (destination / "database.db").read_text(encoding="utf-8") == "valuable"
     assert (destination / "new.db").read_text(encoding="utf-8") == "new"
+
+
+def test_runtime_plist_contains_configured_port(tmp_path: Path) -> None:
+    manager = _manager(tmp_path, port=18080)
+
+    payload = manager._plist_payload()
+
+    assert payload["EnvironmentVariables"] == {"TDX_API_PORT": "18080"}
+
+
+def test_managed_port_change_reuses_healthy_external_service(
+    tmp_path: Path, monkeypatch
+) -> None:
+    manager = _manager(tmp_path, port=18080)
+    manager.runtime_root.mkdir()
+    manager.manifest_path.write_text(
+        json.dumps({"service_port": 8080}), encoding="utf-8"
+    )
+    monkeypatch.setattr(
+        manager,
+        "_job_loaded",
+        lambda target: target == manager.service_target,
+    )
+    retired: list[int] = []
+    monkeypatch.setattr(manager, "_retire_managed_service", retired.append)
+
+    info = manager._ensure_locked()
+
+    assert retired == [8080]
+    assert info.managed is False
+    assert info.port == 18080
+
+
+def test_managed_port_change_rejects_unhealthy_target_without_stopping_old_job(
+    tmp_path: Path, monkeypatch
+) -> None:
+    manager = _manager(tmp_path, port=18080)
+    manager.client.health = lambda: (_ for _ in ()).throw(
+        runtime.TdxApiError("unhealthy")
+    )
+    manager.runtime_root.mkdir()
+    manager.manifest_path.write_text(
+        json.dumps({"service_port": 8080}), encoding="utf-8"
+    )
+    monkeypatch.setattr(
+        manager,
+        "_job_loaded",
+        lambda target: target == manager.service_target,
+    )
+    monkeypatch.setattr(runtime, "_port_open", lambda port: port == 18080)
+    retired: list[int] = []
+    monkeypatch.setattr(manager, "_retire_managed_service", retired.append)
+
+    with pytest.raises(TdxApiDeploymentError, match=r"18080.*unhealthy"):
+        manager._ensure_locked()
+
+    assert retired == []
 
 
 def test_named_legacy_directory_requires_manifest(tmp_path: Path) -> None:
@@ -102,11 +160,12 @@ def test_bundled_asset_manifest_and_checksums_are_valid() -> None:
     manifest = runtime._load_asset_manifest()
     asset_root = Path(runtime.__file__).parent / "assets"
     assert manifest["upstream_sha"] == runtime.UPSTREAM_SHA
-    assert manifest["artifact_generation"] == 2
-    assert manifest["patches"][0]["filename"] == (
-        "tdx-api-ths-response-validation.patch"
-    )
-    assert len(manifest["patches"][0]["sha256"]) == 64
+    assert manifest["artifact_generation"] == 3
+    assert [item["filename"] for item in manifest["patches"]] == [
+        "tdx-api-ths-response-validation.patch",
+        "tdx-api-configurable-port.patch",
+    ]
+    assert all(len(item["sha256"]) == 64 for item in manifest["patches"])
     for asset in manifest["assets"].values():
         path = asset_root / asset["filename"]
         assert path.is_file()

@@ -1,4 +1,4 @@
-"""Thread-safe HTTP client for the fixed local tdx-api service."""
+"""Thread-safe HTTP client for the local tdx-api service."""
 
 from __future__ import annotations
 
@@ -10,7 +10,25 @@ import requests
 
 from pytdxfeed.errors import TdxApiResponseError, TdxApiTransportError
 
-BASE_URL = "http://127.0.0.1:8080"
+HOST = "127.0.0.1"
+DEFAULT_PORT = 8080
+
+
+def validate_port(port: object) -> int:
+    """Require an explicit TCP port integer."""
+    if isinstance(port, bool) or not isinstance(port, int):
+        raise ValueError("port must be an integer between 1 and 65535")
+    if not 1 <= port <= 65535:
+        raise ValueError("port must be an integer between 1 and 65535")
+    return port
+
+
+def local_base_url(port: int = DEFAULT_PORT) -> str:
+    """Build the fixed-host service URL for one validated port."""
+    return f"http://{HOST}:{validate_port(port)}"
+
+
+BASE_URL = local_base_url()
 
 
 class TdxApiClient:
@@ -20,12 +38,15 @@ class TdxApiClient:
         self,
         timeout_sec: float = 10.0,
         *,
+        port: int = DEFAULT_PORT,
         session_factory: Callable[[], requests.Session] = requests.Session,
     ) -> None:
         timeout = float(timeout_sec)
         if timeout <= 0:
             raise ValueError("timeout_sec must be positive")
         self.timeout_sec = timeout
+        self.port = validate_port(port)
+        self.base_url = local_base_url(self.port)
         self._session_factory = session_factory
         self._local = local()
         self._sessions: list[requests.Session] = []
@@ -117,7 +138,7 @@ class TdxApiClient:
         params: Mapping[str, object] | None = None,
         json: object | None = None,
     ) -> object:
-        url = BASE_URL + path
+        url = self.base_url + path
         try:
             response = self._session().request(
                 method,

@@ -16,9 +16,12 @@ from pathlib import Path
 
 UPSTREAM_URL = "https://github.com/oficcejo/tdx-api.git"
 UPSTREAM_SHA = "ea07dccb67aeb92ebde851ac31503b4bf457a318"
-ARTIFACT_GENERATION = 2
+ARTIFACT_GENERATION = 3
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-PATCH_FILES = (REPOSITORY_ROOT / "patches" / "tdx-api-ths-response-validation.patch",)
+PATCH_FILES = (
+    REPOSITORY_ROOT / "patches" / "tdx-api-ths-response-validation.patch",
+    REPOSITORY_ROOT / "patches" / "tdx-api-configurable-port.patch",
+)
 GO_VERSION_RE = re.compile(r"\bgo(\d+)\.(\d+)(?:\.\d+)?\b")
 ARCHITECTURES = ("arm64", "x86_64")
 GO_ARCHITECTURES = {"arm64": "arm64", "x86_64": "amd64"}
@@ -45,6 +48,7 @@ def main() -> None:
         _verify_source(source)
         _apply_patches(source)
         _run([str(go), "test", "./extend"], cwd=source)
+        _run([str(go), "test", "./..."], cwd=source / "web")
 
         assets: dict[str, dict[str, str]] = {}
         for architecture in ARCHITECTURES:

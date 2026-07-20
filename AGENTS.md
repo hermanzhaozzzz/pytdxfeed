@@ -13,10 +13,12 @@
 
 ## Runtime contract
 
-- The service address is fixed at `http://127.0.0.1:8080`.
+- The service host is fixed at `127.0.0.1`; the explicit service port defaults
+  to `8080` and may be configured by consumers. Do not add configurable hosts,
+  base URLs, automatic free-port selection, or alternate service fallback.
 - The macOS runtime root is fixed at `~/.pytdxfeed` and the LaunchAgent label is
   `com.hermanzhaozzzz.pytdxfeed.tdx-api`.
-- Never kill or reuse an unhealthy unknown port owner. A strictly healthy
-  unknown tdx-api service may be used without taking ownership.
+- Never kill or reuse an unhealthy unknown configured-port owner. A strictly
+  healthy unknown tdx-api service on the configured port may be used without
+  taking ownership.
 - Market-data requests have no source fallback and no silent retry.
-
