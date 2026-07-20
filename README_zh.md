@@ -74,6 +74,68 @@ with TdxApiClient(port=service.port) as client:
 端口必须是 `1` 到 `65535` 的整数。host 和完整 base URL 不允许配置，运行时也
 不会自动寻找空闲端口。
 
+### 接近 tick 的轮询
+
+`batch_quote()` 提供当前行情和五档盘口快照，`trade()` 提供滚动窗口内的最近
+逐笔成交。对少量标的同时轮询两个接口，可以得到接近 tick 的使用效果：
+
+```python
+from time import monotonic, sleep
+
+from pytdxfeed import TdxApiClient, TdxApiError
+
+CODES = ("sh600000", "sz000001")
+POLL_INTERVAL_SEC = 1.0
+TRADE_KEY_FIELDS = ("Time", "Price", "Volume", "Status", "Number")
+
+
+def trade_rows(payload: object) -> list[dict]:
+    if not isinstance(payload, dict):
+        return []
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        return []
+    rows = data.get("List")
+    return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+
+
+def trade_key(row: dict) -> tuple:
+    return tuple(row.get(field) for field in TRADE_KEY_FIELDS)
+
+
+previous_windows: dict[str, set[tuple]] = {}
+
+with TdxApiClient(timeout_sec=3.0) as client:
+    while True:
+        started = monotonic()
+        try:
+            quote_snapshot = client.batch_quote(CODES)
+            new_trades: dict[str, list[dict]] = {}
+
+            for code in CODES:
+                rows = trade_rows(client.trade(code))
+                current_keys = {trade_key(row) for row in rows}
+                previous_keys = previous_windows.get(code)
+                new_trades[code] = (
+                    []
+                    if previous_keys is None
+                    else [row for row in rows if trade_key(row) not in previous_keys]
+                )
+                previous_windows[code] = current_keys
+
+            # 实际使用时替换为队列、回调或自己的行情处理函数。
+            print({"quotes": quote_snapshot, "new_trades": new_trades})
+        except TdxApiError as exc:
+            print(f"轮询失败：{exc}")
+
+        elapsed = monotonic() - started
+        sleep(max(0.0, POLL_INTERVAL_SEC - elapsed))
+```
+
+第一次响应只建立基线，不会把最多 1,800 条旧记录当作新成交重放。之后每轮输出
+相对于上一个滚动窗口新增的记录。这仍是尽力而为的轮询：如果两轮之间新增记录数
+超过接口保留窗口，中间成交仍可能遗漏。标的数量增加时应降低请求负载或延长间隔。
+
 ## 能力范围
 
 | 能力 | 公开 API | 范围 |
@@ -83,13 +145,14 @@ with TdxApiClient(port=service.port) as client:
 | 指数 K 线 | `index_all()` | 指定周期的指数历史数据 |
 | 批量行情快照 | `batch_quote()` | 每次明确传入 1-50 个标的 |
 | 最近逐笔成交 | `trade()` | 轮询获取最多 1,800 条最近逐笔记录 |
+| 接近 tick 的轮询 | `batch_quote()` + `trade()` | 调用方控制轮询频率并增量识别逐笔成交 |
 | macOS 服务管理 | `ensure_service()` | 安装、升级、启动、迁移端口并检查 LaunchAgent |
 | 其他操作系统 | `ensure_service()` | 只检查已有服务，不自动安装 |
-| 流式 tick | 不支持 | 没有 WebSocket、订阅、回调或连续 tick 流 |
+| 推送式 tick 流 | 不支持 | 没有 WebSocket、服务端订阅或交易所事件流 |
 | 行情存储 API | 不支持 | 返回上游 JSON，不替用户写入行情数据库 |
 
-`trade()` 能取得逐笔级别的成交记录，但本质上仍是一次请求对应一次快照。需要
-连续 tick 的程序必须自行轮询和去重，或使用其他流式行情源。
+因此 pytdxfeed 支持接近 tick 的轮询和逐笔级别记录，但不宣称提供交易所原生推送
+或无损 tick 采集。
 
 ### 公开方法
 

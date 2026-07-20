@@ -75,6 +75,71 @@ with TdxApiClient(port=service.port) as client:
 The port must be an integer from `1` to `65535`. The host and full base URL are
 not configurable. The runtime never scans for a free port.
 
+### Near-tick Polling
+
+`batch_quote()` provides the current quote and five-level order-book snapshot,
+while `trade()` returns a rolling window of recent transaction records. Polling
+both endpoints can provide near-tick behavior for a small symbol set:
+
+```python
+from time import monotonic, sleep
+
+from pytdxfeed import TdxApiClient, TdxApiError
+
+CODES = ("sh600000", "sz000001")
+POLL_INTERVAL_SEC = 1.0
+TRADE_KEY_FIELDS = ("Time", "Price", "Volume", "Status", "Number")
+
+
+def trade_rows(payload: object) -> list[dict]:
+    if not isinstance(payload, dict):
+        return []
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        return []
+    rows = data.get("List")
+    return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+
+
+def trade_key(row: dict) -> tuple:
+    return tuple(row.get(field) for field in TRADE_KEY_FIELDS)
+
+
+previous_windows: dict[str, set[tuple]] = {}
+
+with TdxApiClient(timeout_sec=3.0) as client:
+    while True:
+        started = monotonic()
+        try:
+            quote_snapshot = client.batch_quote(CODES)
+            new_trades: dict[str, list[dict]] = {}
+
+            for code in CODES:
+                rows = trade_rows(client.trade(code))
+                current_keys = {trade_key(row) for row in rows}
+                previous_keys = previous_windows.get(code)
+                new_trades[code] = (
+                    []
+                    if previous_keys is None
+                    else [row for row in rows if trade_key(row) not in previous_keys]
+                )
+                previous_windows[code] = current_keys
+
+            # Replace this with a queue, callback, or strategy handler.
+            print({"quotes": quote_snapshot, "new_trades": new_trades})
+        except TdxApiError as exc:
+            print(f"poll failed: {exc}")
+
+        elapsed = monotonic() - started
+        sleep(max(0.0, POLL_INTERVAL_SEC - elapsed))
+```
+
+The first response establishes a baseline instead of replaying up to 1,800 old
+records. Later responses emit rows not present in the previous rolling window.
+This is best-effort polling: if more records arrive between polls than the
+endpoint retains, intermediate trades can still be missed. Reduce request load
+or increase the interval as the symbol count grows.
+
 ## Capabilities
 
 | Capability | Public API | Scope |
@@ -84,14 +149,14 @@ not configurable. The runtime never scans for a free port.
 | Index K-lines | `index_all()` | Full index history for one interval |
 | Quote snapshots | `batch_quote()` | 1-50 explicit symbols per request |
 | Recent trades | `trade()` | Polling snapshot of up to 1,800 recent transaction records |
+| Near-tick polling | `batch_quote()` + `trade()` | Caller-controlled polling with incremental trade detection |
 | macOS lifecycle | `ensure_service()` | Installs, upgrades, starts, migrates ports, and checks the LaunchAgent |
 | Other platforms | `ensure_service()` | Health-checks an existing service; it does not install one |
-| Streaming ticks | Not available | No WebSocket, subscription, callback, or continuous tick stream |
+| Push tick stream | Not available | No WebSocket, server-side subscription, or exchange event stream |
 | Storage API | Not available | The package returns upstream JSON and does not write user market data |
 
-`trade()` exposes transaction-level records, but it is a request/response
-snapshot. Applications that need continuous ticks must poll and deduplicate or
-use a separate streaming feed.
+pytdxfeed therefore supports near-tick polling and transaction-level records,
+but does not claim exchange-native push delivery or lossless tick capture.
 
 ### Public Methods
 
