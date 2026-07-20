@@ -1,63 +1,263 @@
 # pytdxfeed
 
-`pytdxfeed` is a private Python wrapper around the local
-[`oficcejo/tdx-api`](https://github.com/oficcejo/tdx-api) service used by VQT
-and `vnpy_ths`. It provides one macOS LaunchAgent and one HTTP client contract,
-so both consumers share the same process instead of deploying competing copies.
+[![PyPI](https://img.shields.io/pypi/v/pytdxfeed)](https://pypi.org/project/pytdxfeed/)
+[![Python](https://img.shields.io/pypi/pyversions/pytdxfeed)](https://pypi.org/project/pytdxfeed/)
+[![CI](https://github.com/hermanzhaozzzz/pytdxfeed/actions/workflows/ci.yml/badge.svg)](https://github.com/hermanzhaozzzz/pytdxfeed/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/hermanzhaozzzz/pytdxfeed)](LICENSE)
 
-The package is installed only from the private Git repository. It is not the
-unrelated package formerly published under similar names on PyPI.
+English | [简体中文](README_zh.md)
 
-## Runtime
+`pytdxfeed` is a Python client and macOS service manager for a local
+[`tdx-api`](https://github.com/oficcejo/tdx-api) market-data service. It gives
+Python applications one strict HTTP client contract and, on macOS, installs a
+pinned native service without requiring Docker or a local Go toolchain.
 
-- Host: `127.0.0.1`
-- Port: `8080` by default; consumers may select another explicit port
-- Runtime root: `~/.pytdxfeed`
-- LaunchAgent: `com.hermanzhaozzzz.pytdxfeed.tdx-api`
-- Pinned upstream commit: `ea07dccb67aeb92ebde851ac31503b4bf457a318`
+The service is always local: the host is fixed to `127.0.0.1`, the default port
+is `8080`, and callers may select another explicit port.
 
-On macOS, `ensure_service()` reuses an already healthy service or installs the
-bundled binary for the current architecture. The persistent upstream database
-is kept in `~/.pytdxfeed/data/database`. On other systems the function only
-checks an existing local service.
+## Installation
+
+Python 3.11-3.13 is supported.
+
+```bash
+uv add pytdxfeed
+```
+
+Or install it into the current uv environment:
+
+```bash
+uv pip install pytdxfeed
+```
+
+## Quick Start
+
+On macOS, `ensure_service()` installs or upgrades the bundled service, registers
+its per-user LaunchAgent, waits for strict health, and returns its runtime
+details. On other operating systems it only verifies an already running local
+service.
+
+```python
+from pytdxfeed import TdxApiClient, ensure_service
+
+service = ensure_service()
+print(service.base_url)  # http://127.0.0.1:8080
+
+with TdxApiClient(timeout_sec=10.0) as client:
+    print(client.health())
+
+    raw_daily = client.kline_all(
+        "sh600000",
+        source="tdx",
+        interval="day",
+        limit=20,
+    )
+    qfq_daily = client.kline_all(
+        "sh600000",
+        source="ths",
+        interval="day",
+        limit=20,
+    )
+    index_daily = client.index_all("sh000300", interval="day", limit=20)
+    quotes = client.batch_quote(["sh600000", "sz000001"])
+    recent_trades = client.trade("sh600000")
+```
+
+Use the same explicit port for service management and client requests:
 
 ```python
 from pytdxfeed import TdxApiClient, ensure_service
 
 service = ensure_service(port=18080)
-with TdxApiClient(timeout_sec=3.0, port=18080) as client:
-    health = client.health()
-    quotes = client.batch_quote(["sh600000", "sz159915"])
+with TdxApiClient(port=service.port) as client:
+    client.health()
 ```
 
-The host and LaunchAgent identity stay fixed. Port selection is explicit: the
-runtime never scans for a free port, and an unhealthy unknown process occupying
-the selected port causes startup to fail without terminating that process. The
-managed macOS service receives the selected port through `TDX_API_PORT`.
+The port must be an integer from `1` to `65535`. The host and full base URL are
+not configurable. The runtime never scans for a free port.
+
+## Capabilities
+
+| Capability | Public API | Scope |
+|---|---|---|
+| Strict health check | `health()` | Requires the exact healthy response from the pinned service |
+| Stock K-lines | `kline_all()` | Raw TDX or THS-adjusted stock data |
+| Index K-lines | `index_all()` | Full index history for one interval |
+| Quote snapshots | `batch_quote()` | 1-50 explicit symbols per request |
+| Recent trades | `trade()` | Polling snapshot of up to 1,800 recent transaction records |
+| macOS lifecycle | `ensure_service()` | Installs, upgrades, starts, migrates ports, and checks the LaunchAgent |
+| Other platforms | `ensure_service()` | Health-checks an existing service; it does not install one |
+| Streaming ticks | Not available | No WebSocket, subscription, callback, or continuous tick stream |
+| Storage API | Not available | The package returns upstream JSON and does not write user market data |
+
+`trade()` exposes transaction-level records, but it is a request/response
+snapshot. Applications that need continuous ticks must poll and deduplicate or
+use a separate streaming feed.
+
+### Public Methods
+
+| Method | Important arguments | Upstream endpoint |
+|---|---|---|
+| `ensure_service()` | `port=8080`, `timeout_sec=2.0`, `startup_timeout_sec=120.0` | Service lifecycle and `/api/health` |
+| `TdxApiClient()` | `timeout_sec=10.0`, `port=8080` | Creates thread-local HTTP sessions |
+| `health()` | None | `GET /api/health` |
+| `kline_all()` | `code`, `source`, `interval`, optional `limit` | `GET /api/kline-all/{tdx|ths}` |
+| `index_all()` | `code`, `interval`, optional `limit` | `GET /api/index/all` |
+| `batch_quote()` | Iterable of 1-50 codes | `POST /api/batch-quote` |
+| `trade()` | One code | `GET /api/trade` |
+
+Codes use the upstream lower-case exchange prefix, for example `sh600000`,
+`sz000001`, or `bj920002`. Responses are the upstream JSON objects; pytdxfeed
+does not rename fields, rescale prices, or convert results to pandas objects.
+
+### K-line Coverage
+
+| Source | Intervals | Adjustment | Typical coverage and limits |
+|---|---|---|---|
+| `tdx` stock | `minute1`, `minute5`, `minute15`, `minute30`, `hour` | Raw | About 24,000 bars per interval; the calendar span grows with the interval |
+| `tdx` stock | `day`, `week`, `month`, `quarter`, `year` | Raw | Usually listing-to-present; the service joins underlying 800-bar batches |
+| `ths` stock | `day`, `week`, `month` | Forward-adjusted | Listing-to-latest data available from the THS endpoint |
+| Index | Same interval names as TDX | Index points | Coverage depends on the selected index and upstream servers |
+
+The minute history is bar-count limited, not year limited. In a check on
+`sh600000` dated 2026-07-20, `minute1` returned 23,520 bars from 2026-02-26 and
+`minute5` returned 23,952 bars from 2024-06-28. Daily TDX data returned 6,349
+bars from the 1999-11-10 listing date. Different symbols and upstream servers
+can produce different ranges.
+
+Calls fetch the latest data available from the selected endpoint. pytdxfeed has
+no scheduler and makes no freshness guarantee beyond the successful upstream
+response.
+
+## Failure Semantics
+
+The client does not retry requests or switch sources. This keeps the selected
+market-data source observable.
+
+```python
+from pytdxfeed import (
+    TdxApiClient,
+    TdxApiDeploymentError,
+    TdxApiResponseError,
+    TdxApiTransportError,
+)
+
+try:
+    with TdxApiClient(timeout_sec=10.0) as client:
+        payload = client.kline_all(
+            "sh600000",
+            source="tdx",
+            interval="minute1",
+        )
+except TdxApiTransportError as exc:
+    print(f"HTTP connection failed: {exc}")
+except TdxApiResponseError as exc:
+    print(f"tdx-api rejected the request: {exc}")
+except TdxApiDeploymentError as exc:
+    print(f"the managed service could not start: {exc}")
+```
+
+If the selected port is occupied by another strictly healthy `tdx-api`, it is
+reused as an external service. If an unknown process returns an unhealthy or
+incompatible response, startup fails without terminating that process.
+
+## Managed Runtime
+
+| Setting | Value |
+|---|---|
+| Host | `127.0.0.1` |
+| Default port | `8080` |
+| Managed platforms | macOS arm64 and x86_64 |
+| Runtime root | `~/.pytdxfeed` |
+| Persistent service data | `~/.pytdxfeed/data/database` |
+| LaunchAgent label | `com.hermanzhaozzzz.pytdxfeed.tdx-api` |
+| Logs | `~/.pytdxfeed/logs` |
+
+Changing the configured port rebuilds the managed plist and restarts the owned
+service while preserving its data directory. Newer compatible artifact
+generations are never downgraded.
+
+### Bundled tdx-api
+
+| Item | v1.0.0 value |
+|---|---|
+| Upstream repository | [`oficcejo/tdx-api`](https://github.com/oficcejo/tdx-api) |
+| Upstream commit | [`ea07dccb67aeb92ebde851ac31503b4bf457a318`](https://github.com/oficcejo/tdx-api/commit/ea07dccb67aeb92ebde851ac31503b4bf457a318) |
+| Commit date | 2026-06-27 |
+| Service API major | `1` |
+| Artifact generation | `3` |
+| Bundled architectures | `darwin-arm64`, `darwin-x86_64` |
+| Reviewed patches | THS response validation; strict `TDX_API_PORT` support |
+
+The upstream project declares the MIT License in its README. pytdxfeed's own
+source and release metadata are provided under the [MIT License](LICENSE).
+
+## Performance
+
+The following local measurements used an Apple M2 Mac mini (8 cores, 16 GB),
+macOS 26.5.2, `sh600000`, a warm service on loopback, one warm-up request, and
+five measured requests on 2026-07-20.
+
+| Operation | Returned data | p50 latency |
+|---|---:|---:|
+| Health | 41-byte response | `0.5 ms` |
+| Batch quote | 2 symbols | `44.7 ms` |
+| Recent trades | 1,800 records | `50.2 ms` |
+| Full daily history | 6,349 bars / about 1.0 MiB | `381.5 ms` |
+| Full 1-minute history | 23,520 bars / about 3.5 MiB | `1.406 s` |
+
+These measurements are examples, not a service-level guarantee. Latency varies
+with symbol history, response size, upstream server selection, network quality,
+and market hours.
+
+Run the reproducible benchmark against your local service:
+
+```bash
+uv run python benchmarks/benchmark_client.py \
+  --symbol sh600000 \
+  --second-symbol sz000001 \
+  --port 8080 \
+  --iterations 5
+```
+
+The script reports rows, response size, minimum, p50, p95, and maximum latency
+as a Markdown table.
+
+## Distribution
+
+| Channel | Purpose |
+|---|---|
+| [PyPI](https://pypi.org/project/pytdxfeed/) | Primary installation channel |
+| [GitHub Releases](https://github.com/hermanzhaozzzz/pytdxfeed/releases) | Release notes plus matching wheel and source archive |
+| GitHub Packages | Not used because GitHub does not provide a Python/PyPI package registry |
 
 ## Development
 
 ```bash
+git clone https://github.com/hermanzhaozzzz/pytdxfeed.git
+cd pytdxfeed
 uv sync --locked --all-groups
 uv run ruff check .
 uv run ruff format --check .
 uv run pytest
 uv build
+uvx --from twine twine check dist/*
 ```
 
-Regenerate the private macOS assets when the locked upstream commit or reviewed
-private patch set changes:
+Regenerate the deterministic macOS assets only when the locked upstream commit
+or reviewed patch set changes:
 
 ```bash
-uv run python scripts/build_assets.py --source /path/to/tdx-api
+uv run python scripts/build_assets.py
 ```
 
-The build verifies the exact clean upstream checkout, applies the patches in
-`patches/`, runs their Go tests, and records every patch checksum in the asset
-manifest. Artifact generation 3 retains explicit THS JSONP validation and adds
-strict `TDX_API_PORT` handling to the Go service. It does not retry or switch
-market-data sources.
+The build checks out the exact upstream commit, verifies a clean tree, applies
+the reviewed patches, runs the upstream Go tests, and records SHA-256 hashes in
+the asset manifest.
 
-The upstream repository currently has no declared license. This repository and
-its derived binaries must remain private/internal until redistribution terms are
-clear.
+## License
+
+MIT. See [LICENSE](LICENSE).
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=hermanzhaozzzz/pytdxfeed&type=Date)](https://www.star-history.com/#hermanzhaozzzz/pytdxfeed&Date)

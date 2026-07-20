@@ -1,15 +1,34 @@
 [project]
 name = "pytdxfeed"
-version = "0.2.0"
-description = "Private macOS runtime and HTTP client for oficcejo/tdx-api."
+version = "1.0.0"
+description = "Python client and macOS service manager for a local tdx-api market data service."
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
+license = "MIT"
 authors = [
     { name = "Huanan Herman Zhao", email = "hermanzhaozzzz@gmail.com" },
+]
+keywords = ["a-share", "market-data", "tdx", "tongdaxin"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business :: Financial",
 ]
 dependencies = [
     "requests>=2.32.0,<3.0.0",
 ]
+
+[project.urls]
+Homepage = "https://pypi.org/project/pytdxfeed/"
+Repository = "https://github.com/hermanzhaozzzz/pytdxfeed"
+Issues = "https://github.com/hermanzhaozzzz/pytdxfeed/issues"
+Releases = "https://github.com/hermanzhaozzzz/pytdxfeed/releases"
+"Bundled tdx-api" = "https://github.com/oficcejo/tdx-api/commit/ea07dccb67aeb92ebde851ac31503b4bf457a318"
 
 [dependency-groups]
 dev = [
@@ -29,8 +48,11 @@ include = [
     "/src",
     "/tests",
     "/scripts",
+    "/benchmarks",
     "/patches",
     "/README.md",
+    "/README_zh.md",
+    "/LICENSE",
     "/AGENTS.md",
     "/pyproject.toml",
     "/uv.lock",

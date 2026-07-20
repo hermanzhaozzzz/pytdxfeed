@@ -1,0 +1,81 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Publish to PyPI and GitHub Releases
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Validate locked dependencies
+        run: uv lock --check
+
+      - name: Install development dependencies
+        run: uv sync --locked --all-groups
+
+      - name: Verify release version
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#v}"
+          project_version="$(uv version --short)"
+          runtime_version="$(uv run python -c 'import pytdxfeed; print(pytdxfeed.__version__)')"
+          test "$tag_version" = "$project_version"
+          test "$project_version" = "$runtime_version"
+          echo "PACKAGE_VERSION=$project_version" >> "$GITHUB_ENV"
+
+      - name: Run quality checks
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run pytest
+
+      - name: Build distributions
+        run: uv build
+
+      - name: Validate distributions
+        run: uvx --from twine twine check dist/*
+
+      - name: Require PyPI token
+        shell: bash
+        env:
+          PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: test -n "$PYPI_API_TOKEN"
+
+      - name: Publish distributions to PyPI
+        env:
+          UV_PUBLISH_USERNAME: __token__
+          UV_PUBLISH_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: >-
+          uv publish
+          --trusted-publishing never
+          --check-url https://pypi.org/simple
+          dist/*
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* \
+              --verify-tag \
+              --generate-notes \
+              --latest \
+              --title "pytdxfeed ${PACKAGE_VERSION}"
+          fi
