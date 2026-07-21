@@ -125,6 +125,7 @@ class TdxApiClient:
         session = getattr(self._local, "session", None)
         if session is None:
             session = self._session_factory()
+            session.trust_env = False
             self._local.session = session
             with self._sessions_lock:
                 self._sessions.append(session)

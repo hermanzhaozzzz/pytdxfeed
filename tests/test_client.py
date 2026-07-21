@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
 
 import pytest
@@ -38,6 +40,7 @@ class Session:
         self.responses = responses
         self.calls: list[tuple[str, str, object, object]] = []
         self.closed = False
+        self.trust_env = True
 
     def request(self, method, url, *, params, json, timeout):
         self.calls.append((method, url, params, json))
@@ -82,6 +85,35 @@ def test_client_uses_configured_local_port() -> None:
     assert client.port == 18080
     assert client.base_url == "http://127.0.0.1:18080"
     assert session.calls[0][1] == "http://127.0.0.1:18080/api/health"
+
+
+def test_client_disables_environment_proxy_for_loopback(monkeypatch) -> None:
+    class HealthHandler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            assert self.path == "/api/health"
+            body = json.dumps({"status": "healthy"}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *_args: object) -> None:
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), HealthHandler)
+    thread = Thread(target=server.serve_forever)
+    thread.start()
+    monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:1")
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:1")
+    monkeypatch.setenv("NO_PROXY", "")
+    try:
+        with TdxApiClient(timeout_sec=1, port=server.server_port) as client:
+            assert client.health() == {"status": "healthy"}
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
 
 
 @pytest.mark.parametrize("port", [True, "18080", 0, 65536])
