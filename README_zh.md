@@ -234,7 +234,7 @@ except TdxApiDeploymentError as exc:
 
 ### 内置 tdx-api 版本
 
-| 项目 | v1.0.0 使用值 |
+| 项目 | v1.0.1 使用值 |
 |---|---|
 | 上游仓库 | [`oficcejo/tdx-api`](https://github.com/oficcejo/tdx-api) |
 | 上游 commit | [`ea07dccb67aeb92ebde851ac31503b4bf457a318`](https://github.com/oficcejo/tdx-api/commit/ea07dccb67aeb92ebde851ac31503b4bf457a318) |

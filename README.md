@@ -243,7 +243,7 @@ generations are never downgraded.
 
 ### Bundled tdx-api
 
-| Item | v1.0.0 value |
+| Item | v1.0.1 value |
 |---|---|
 | Upstream repository | [`oficcejo/tdx-api`](https://github.com/oficcejo/tdx-api) |
 | Upstream commit | [`ea07dccb67aeb92ebde851ac31503b4bf457a318`](https://github.com/oficcejo/tdx-api/commit/ea07dccb67aeb92ebde851ac31503b4bf457a318) |
