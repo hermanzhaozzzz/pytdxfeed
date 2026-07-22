@@ -61,6 +61,27 @@ def test_newer_api_is_rejected(tmp_path: Path) -> None:
         )
 
 
+def test_same_generation_requires_locked_source_sha(tmp_path: Path) -> None:
+    manager = _manager(tmp_path)
+    manager.binary_path.parent.mkdir(parents=True)
+    manager.binary_path.touch()
+    manager.static_path.mkdir()
+
+    assert not manager._deployment_acceptable(
+        {
+            "api_major": 1,
+            "artifact_generation": 4,
+            "service_port": 8080,
+            "source_sha": "0" * 40,
+        },
+        {
+            "api_major": 1,
+            "artifact_generation": 4,
+            "source_sha": runtime.SOURCE_SHA,
+        },
+    )
+
+
 def test_copy_missing_tree_does_not_overwrite(tmp_path: Path) -> None:
     source = tmp_path / "source"
     destination = tmp_path / "destination"
@@ -143,9 +164,10 @@ def test_acceptable_loaded_runtime_waits_for_health_without_redeploying(
         json.dumps(
             {
                 "api_major": 1,
-                "artifact_generation": 3,
+                "artifact_generation": 4,
                 "service_port": 8080,
-                "upstream_sha": runtime.UPSTREAM_SHA,
+                "source_sha": runtime.SOURCE_SHA,
+                "upstream_base_sha": runtime.UPSTREAM_BASE_SHA,
             }
         ),
         encoding="utf-8",
@@ -194,8 +216,9 @@ def test_acceptable_loaded_runtime_health_timeout_never_redeploys(
         json.dumps(
             {
                 "api_major": 1,
-                "artifact_generation": 3,
+                "artifact_generation": 4,
                 "service_port": 8080,
+                "source_sha": runtime.SOURCE_SHA,
             }
         ),
         encoding="utf-8",
@@ -253,13 +276,10 @@ def test_archive_rejects_parent_traversal(tmp_path: Path) -> None:
 def test_bundled_asset_manifest_and_checksums_are_valid() -> None:
     manifest = runtime._load_asset_manifest()
     asset_root = Path(runtime.__file__).parent / "assets"
-    assert manifest["upstream_sha"] == runtime.UPSTREAM_SHA
-    assert manifest["artifact_generation"] == 3
-    assert [item["filename"] for item in manifest["patches"]] == [
-        "tdx-api-ths-response-validation.patch",
-        "tdx-api-configurable-port.patch",
-    ]
-    assert all(len(item["sha256"]) == 64 for item in manifest["patches"])
+    assert manifest["source_sha"] == runtime.SOURCE_SHA
+    assert manifest["upstream_base_sha"] == runtime.UPSTREAM_BASE_SHA
+    assert manifest["artifact_generation"] == 4
+    assert "patches" not in manifest
     for asset in manifest["assets"].values():
         path = asset_root / asset["filename"]
         assert path.is_file()

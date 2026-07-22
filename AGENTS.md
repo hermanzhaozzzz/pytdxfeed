@@ -9,10 +9,34 @@
   package version in `pyproject.toml` and `src/pytdxfeed/_version.py` identical.
 - Release tags use `vMAJOR.MINOR.PATCH`. The release workflow must validate,
   build, publish with uv, and attach the exact same distributions to GitHub.
-- Keep the bundled tdx-api commit, API major, artifact generation, patches,
-  and supported architectures visible in both user READMEs.
+- Keep the bundled fork commit, upstream base commit, API major, artifact
+  generation, and supported architectures visible in both user READMEs.
 - Before pushing, run `uv run ruff check .`, `uv run ruff format --check .`,
   `uv run pytest`, `uv build`, and distribution metadata checks.
+
+## tdx-api release audit
+
+- Bundled binaries are built from an exact commit of
+  `hermanzhaozzzz/tdx-api`; do not restore the downstream patch-application
+  build path. `oficcejo/tdx-api` remains the upstream project and the fork's
+  `upstream-main` branch is its strict mirror.
+- Before every pytdxfeed release, fetch the upstream `main` branch and tags,
+  then review every change from the recorded upstream base through the latest
+  upstream HEAD. The review must cover Go code, dependencies, HTTP contracts,
+  market-data semantics, and newly available capabilities.
+- Record the reviewed upstream HEAD, the adopt/defer decision and reason, each
+  still-required fork commit, and the compatibility impact for `vnpy_ths` and
+  VQT in `release/upstream-audits/vMAJOR.MINOR.PATCH.json`.
+- A release is blocked when its audit record, package version, fork source SHA,
+  upstream HEAD, asset manifest, API major, artifact generation, or asset
+  checksums disagree. The release workflow must verify the live upstream and
+  fork refs before publication.
+- Every released version requires an exact dependency and lock-file update in
+  `vnpy_ths` and VQT plus a rolling compatibility marker in each downstream
+  `AGENTS.md`, even when the audit concludes that no code adaptation is needed.
+- After an upstream qfq change is merged, update `upstream-main` and rebuild
+  fork `main` so the equivalent local commit is removed or replayed from the
+  upstream implementation rather than maintained twice.
 
 ## Runtime contract
 

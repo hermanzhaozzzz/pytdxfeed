@@ -8,7 +8,7 @@
 English | [简体中文](README_zh.md)
 
 `pytdxfeed` is a Python client and macOS service manager for a local
-[`tdx-api`](https://github.com/oficcejo/tdx-api) market-data service. It gives
+[`tdx-api`](https://github.com/hermanzhaozzzz/tdx-api) market-data service. It gives
 Python applications one strict HTTP client contract and, on macOS, installs a
 pinned native service without requiring Docker or a local Go toolchain.
 
@@ -183,6 +183,12 @@ does not rename fields, rescale prices, or convert results to pandas objects.
 | `ths` stock | `day`, `week`, `month` | Forward-adjusted | Listing-to-latest data available from the THS endpoint |
 | Index | Same interval names as TDX | Index points | Coverage depends on the selected index and upstream servers |
 
+For THS forward-adjusted daily data, the bundled service treats `all.js` as the
+history source. From 15:10 Asia/Shanghai onward it can complete a missing closed
+tail from `today.js`, but only after the date and integer-milliyuan OHLC match
+the same TDX raw daily bar exactly. TDX supplies that tail's volume and amount.
+Incomplete or mismatched responses fail explicitly; `last.js` is not used.
+
 The minute history is bar-count limited, not year limited. In a check on
 `sh600000` dated 2026-07-20, `minute1` returned 23,520 bars from 2026-02-26 and
 `minute5` returned 23,952 bars from 2024-06-28. Daily TDX data returned 6,349
@@ -243,18 +249,22 @@ generations are never downgraded.
 
 ### Bundled tdx-api
 
-| Item | v1.0.1 value |
+| Item | v1.0.2 value |
 |---|---|
+| Source repository | [`hermanzhaozzzz/tdx-api`](https://github.com/hermanzhaozzzz/tdx-api) |
+| Source commit | [`10e718f4844eb797e5d3750c0bfba9150a7866b7`](https://github.com/hermanzhaozzzz/tdx-api/commit/10e718f4844eb797e5d3750c0bfba9150a7866b7) |
 | Upstream repository | [`oficcejo/tdx-api`](https://github.com/oficcejo/tdx-api) |
-| Upstream commit | [`ea07dccb67aeb92ebde851ac31503b4bf457a318`](https://github.com/oficcejo/tdx-api/commit/ea07dccb67aeb92ebde851ac31503b4bf457a318) |
-| Commit date | 2026-06-27 |
+| Upstream base | [`ea07dccb67aeb92ebde851ac31503b4bf457a318`](https://github.com/oficcejo/tdx-api/commit/ea07dccb67aeb92ebde851ac31503b4bf457a318) |
+| Source commit date | 2026-07-22 |
 | Service API major | `1` |
-| Artifact generation | `3` |
+| Artifact generation | `4` |
 | Bundled architectures | `darwin-arm64`, `darwin-x86_64` |
-| Reviewed patches | THS response validation; strict `TDX_API_PORT` support |
+| Reviewed fork changes | Strict `TDX_API_PORT`; THS response validation; verified qfq close tail |
 
-The upstream project declares the MIT License in its README. pytdxfeed's own
-source and release metadata are provided under the [MIT License](LICENSE).
+The source fork tracks the upstream project and preserves its general-purpose
+code only. The upstream project declares the MIT License in its README.
+pytdxfeed's own source and release metadata are provided under the
+[MIT License](LICENSE).
 
 ## Performance
 
@@ -304,20 +314,22 @@ uv sync --locked --all-groups
 uv run ruff check .
 uv run ruff format --check .
 uv run pytest
+uv run python scripts/check_release_audit.py
 uv build
 uvx --from twine twine check dist/*
 ```
 
-Regenerate the deterministic macOS assets only when the locked upstream commit
-or reviewed patch set changes:
+Regenerate the deterministic macOS assets when the locked fork commit changes:
 
 ```bash
 uv run python scripts/build_assets.py
 ```
 
-The build checks out the exact upstream commit, verifies a clean tree, applies
-the reviewed patches, runs the upstream Go tests, and records SHA-256 hashes in
-the asset manifest.
+The build checks out the exact fork commit into clean build and test clones,
+runs both Go modules' tests, builds both macOS architectures without CGO, and
+records source/upstream provenance plus SHA-256 hashes in the asset manifest.
+Before a release, update its machine-readable upstream audit and run the audit
+checker with `--check-remotes`.
 
 ## License
 

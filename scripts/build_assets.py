@@ -1,4 +1,4 @@
-"""Build deterministic private macOS tdx-api assets for pytdxfeed."""
+"""Build deterministic macOS tdx-api assets for pytdxfeed."""
 
 from __future__ import annotations
 
@@ -14,14 +14,12 @@ import tarfile
 import tempfile
 from pathlib import Path
 
+SOURCE_URL = "https://github.com/hermanzhaozzzz/tdx-api.git"
+SOURCE_SHA = "10e718f4844eb797e5d3750c0bfba9150a7866b7"
 UPSTREAM_URL = "https://github.com/oficcejo/tdx-api.git"
-UPSTREAM_SHA = "ea07dccb67aeb92ebde851ac31503b4bf457a318"
-ARTIFACT_GENERATION = 3
+UPSTREAM_BASE_SHA = "ea07dccb67aeb92ebde851ac31503b4bf457a318"
+ARTIFACT_GENERATION = 4
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-PATCH_FILES = (
-    REPOSITORY_ROOT / "patches" / "tdx-api-ths-response-validation.patch",
-    REPOSITORY_ROOT / "patches" / "tdx-api-configurable-port.patch",
-)
 GO_VERSION_RE = re.compile(r"\bgo(\d+)\.(\d+)(?:\.\d+)?\b")
 ARCHITECTURES = ("arm64", "x86_64")
 GO_ARCHITECTURES = {"arm64": "arm64", "x86_64": "amd64"}
@@ -41,14 +39,21 @@ def main() -> None:
     args.output.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="pytdxfeed-assets-") as temp_text:
         temp = Path(temp_text)
-        source = args.source.expanduser().resolve() if args.source else temp / "source"
-        if args.source is None:
-            _run(["git", "clone", "--no-checkout", UPSTREAM_URL, str(source)])
-            _run(["git", "-C", str(source), "checkout", "--detach", UPSTREAM_SHA])
+        source = temp / "source"
+        source_origin = (
+            args.source.expanduser().resolve() if args.source else SOURCE_URL
+        )
+        if args.source is not None:
+            _verify_source(source_origin)
+        _run(["git", "clone", "--no-checkout", str(source_origin), str(source)])
+        _run(["git", "-C", str(source), "checkout", "--detach", SOURCE_SHA])
         _verify_source(source)
-        _apply_patches(source)
-        _run([str(go), "test", "./extend"], cwd=source)
-        _run([str(go), "test", "./..."], cwd=source / "web")
+
+        test_source = temp / "test-source"
+        _run(["git", "clone", "--no-checkout", str(source), str(test_source)])
+        _run(["git", "-C", str(test_source), "checkout", "--detach", SOURCE_SHA])
+        _run([str(go), "test", "./..."], cwd=test_source)
+        _run([str(go), "test", "./..."], cwd=test_source / "web")
 
         assets: dict[str, dict[str, str]] = {}
         for architecture in ARCHITECTURES:
@@ -80,7 +85,7 @@ def main() -> None:
                 source / "web" / "data" / "database",
                 root / "data" / "database",
             )
-            filename = f"tdx-api-{UPSTREAM_SHA[:12]}-darwin-{architecture}.tar.gz"
+            filename = f"tdx-api-{SOURCE_SHA[:12]}-darwin-{architecture}.tar.gz"
             archive = args.output / filename
             _write_deterministic_archive(root, archive)
             assets[architecture] = {
@@ -89,20 +94,23 @@ def main() -> None:
             }
 
     manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
         "api_major": 1,
         "artifact_generation": ARTIFACT_GENERATION,
+        "source_url": SOURCE_URL,
+        "source_sha": SOURCE_SHA,
         "upstream_url": UPSTREAM_URL,
-        "upstream_sha": UPSTREAM_SHA,
-        "patches": [
-            {"filename": patch.name, "sha256": _sha256(patch)} for patch in PATCH_FILES
-        ],
+        "upstream_base_sha": UPSTREAM_BASE_SHA,
         "assets": assets,
     }
     (args.output / "manifest.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    expected_archives = {asset["filename"] for asset in assets.values()}
+    for archive in args.output.glob("tdx-api-*-darwin-*.tar.gz"):
+        if archive.name not in expected_archives:
+            archive.unlink()
 
 
 def _require_go() -> Path:
@@ -118,8 +126,8 @@ def _require_go() -> Path:
 
 def _verify_source(source: Path) -> None:
     head = _run(["git", "-C", str(source), "rev-parse", "HEAD"]).stdout.strip()
-    if head != UPSTREAM_SHA:
-        raise SystemExit(f"source HEAD is {head}, expected {UPSTREAM_SHA}")
+    if head != SOURCE_SHA:
+        raise SystemExit(f"source HEAD is {head}, expected {SOURCE_SHA}")
     if not (source / "web" / "go.mod").is_file():
         raise SystemExit(f"source does not contain web/go.mod: {source}")
     status = _run(
@@ -127,14 +135,6 @@ def _verify_source(source: Path) -> None:
     ).stdout.strip()
     if status:
         raise SystemExit(f"source checkout is dirty:\n{status}")
-
-
-def _apply_patches(source: Path) -> None:
-    for patch in PATCH_FILES:
-        if not patch.is_file():
-            raise SystemExit(f"required private patch is missing: {patch}")
-        _run(["git", "-C", str(source), "apply", "--check", str(patch)])
-        _run(["git", "-C", str(source), "apply", str(patch)])
 
 
 def _write_deterministic_archive(source: Path, destination: Path) -> None:

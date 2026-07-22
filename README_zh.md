@@ -7,7 +7,7 @@
 
 [English](README.md) | 简体中文
 
-`pytdxfeed` 是本地 [`tdx-api`](https://github.com/oficcejo/tdx-api)
+`pytdxfeed` 是本地 [`tdx-api`](https://github.com/hermanzhaozzzz/tdx-api)
 行情服务的 Python 客户端和 macOS 服务管理器。Python 程序通过统一、严格的
 HTTP 客户端读取行情；macOS 用户无需安装 Docker 或 Go 工具链，包会自动安装
 锁定版本的原生服务。
@@ -179,6 +179,11 @@ with TdxApiClient(timeout_sec=3.0) as client:
 | `ths` 股票 | `day`、`week`、`month` | 前复权 | 覆盖 THS 接口当前可提供的上市以来数据 |
 | 指数 | 与 TDX 相同的周期名称 | 指数点位 | 取决于具体指数和上游服务器 |
 
+THS 前复权日线以 `all.js` 作为历史来源。上海时间 15:10 以后，如果已完成的
+收盘尾部仍缺失，内置服务可以用 `today.js` 补齐，但日期和按千分之一元转换后的
+OHLC 必须与同日 TDX raw 日线精确一致；该尾部的成交量和成交额取自 TDX。
+响应残缺或不一致会明确失败，不使用 `last.js`。
+
 分钟线按 bar 数量限制，不按固定年限限制。2026-07-20 对 `sh600000` 的实测中，
 `minute1` 返回 23,520 根，起点为 2026-02-26；`minute5` 返回 23,952 根，
 起点为 2024-06-28。TDX 日线返回 6,349 根，起点为上市日 1999-11-10。
@@ -234,18 +239,20 @@ except TdxApiDeploymentError as exc:
 
 ### 内置 tdx-api 版本
 
-| 项目 | v1.0.1 使用值 |
+| 项目 | v1.0.2 使用值 |
 |---|---|
+| 源码仓库 | [`hermanzhaozzzz/tdx-api`](https://github.com/hermanzhaozzzz/tdx-api) |
+| 源码 commit | [`10e718f4844eb797e5d3750c0bfba9150a7866b7`](https://github.com/hermanzhaozzzz/tdx-api/commit/10e718f4844eb797e5d3750c0bfba9150a7866b7) |
 | 上游仓库 | [`oficcejo/tdx-api`](https://github.com/oficcejo/tdx-api) |
-| 上游 commit | [`ea07dccb67aeb92ebde851ac31503b4bf457a318`](https://github.com/oficcejo/tdx-api/commit/ea07dccb67aeb92ebde851ac31503b4bf457a318) |
-| Commit 日期 | 2026-06-27 |
+| 上游基线 | [`ea07dccb67aeb92ebde851ac31503b4bf457a318`](https://github.com/oficcejo/tdx-api/commit/ea07dccb67aeb92ebde851ac31503b4bf457a318) |
+| 源码 commit 日期 | 2026-07-22 |
 | 服务 API major | `1` |
-| Artifact generation | `3` |
+| Artifact generation | `4` |
 | 内置架构 | `darwin-arm64`、`darwin-x86_64` |
-| 审核补丁 | THS 响应校验；严格的 `TDX_API_PORT` 支持 |
+| 审核后的 fork 改动 | 严格的 `TDX_API_PORT`；THS 响应校验；经交叉核验的 qfq 收盘尾部 |
 
-上游项目在 README 中声明使用 MIT License。pytdxfeed 自有源码和发布元数据使用
-[MIT License](LICENSE)。
+源码 fork 跟踪上游，并只保留通用实现。上游项目在 README 中声明使用 MIT
+License。pytdxfeed 自有源码和发布元数据使用 [MIT License](LICENSE)。
 
 ## 性能
 
@@ -293,18 +300,21 @@ uv sync --locked --all-groups
 uv run ruff check .
 uv run ruff format --check .
 uv run pytest
+uv run python scripts/check_release_audit.py
 uv build
 uvx --from twine twine check dist/*
 ```
 
-只有锁定的上游 commit 或审核补丁发生变化时才需要重建 macOS 资产：
+锁定的 fork commit 变化时需要重建 macOS 资产：
 
 ```bash
 uv run python scripts/build_assets.py
 ```
 
-构建脚本会检出准确的上游 commit、确认工作树干净、应用审核补丁、运行上游 Go
-测试，并把 SHA-256 写入资产 manifest。
+构建脚本会把准确的 fork commit 分别检出到干净的构建和测试 clone，运行两个 Go
+module 的测试，无 CGO 构建两种 macOS 架构，并把源码、上游基线和 SHA-256 写入
+资产 manifest。发布前还要更新机器可读的上游审计记录，并使用
+`--check-remotes` 运行审计检查器。
 
 ## 许可证
 

@@ -1,27 +1,19 @@
 {
   "api_major": 1,
-  "artifact_generation": 3,
+  "artifact_generation": 4,
   "assets": {
     "arm64": {
-      "filename": "tdx-api-ea07dccb67ae-darwin-arm64.tar.gz",
-      "sha256": "8b99f16639c248c3b634f613abfc9d8bd469f5428aa70b6f16ca38c700a7e8c5"
+      "filename": "tdx-api-10e718f4844e-darwin-arm64.tar.gz",
+      "sha256": "aa2b11fd1729f6d8c942ecad88c1a7b7b53530b9f03674d327e5d9dc50c3a941"
     },
     "x86_64": {
-      "filename": "tdx-api-ea07dccb67ae-darwin-x86_64.tar.gz",
-      "sha256": "9696b1332b826bb0d723da52cd3c558ae529ed31de6a6989f6d9e982659a4a31"
+      "filename": "tdx-api-10e718f4844e-darwin-x86_64.tar.gz",
+      "sha256": "38a19f9edbe41dcc82a6202be7adce4108afe67c35bf3c67286728980c4e2a50"
     }
   },
-  "patches": [
-    {
-      "filename": "tdx-api-ths-response-validation.patch",
-      "sha256": "6f27e36df68011cd60038b701b155788a7b90ad0cd7522c37144042cd6d17e20"
-    },
-    {
-      "filename": "tdx-api-configurable-port.patch",
-      "sha256": "f1c7d6824ce8f5c486d854a85ffab30ecef053e243b25b017c953b2b505e28a2"
-    }
-  ],
-  "schema_version": 1,
-  "upstream_sha": "ea07dccb67aeb92ebde851ac31503b4bf457a318",
+  "schema_version": 2,
+  "source_sha": "10e718f4844eb797e5d3750c0bfba9150a7866b7",
+  "source_url": "https://github.com/hermanzhaozzzz/tdx-api.git",
+  "upstream_base_sha": "ea07dccb67aeb92ebde851ac31503b4bf457a318",
   "upstream_url": "https://github.com/oficcejo/tdx-api.git"
 }

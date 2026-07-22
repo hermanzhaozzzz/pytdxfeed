@@ -31,7 +31,10 @@ from pytdxfeed.client import (
 from pytdxfeed.errors import TdxApiDeploymentError, TdxApiError
 
 PORT = DEFAULT_PORT
-UPSTREAM_SHA = "ea07dccb67aeb92ebde851ac31503b4bf457a318"
+SOURCE_SHA = "10e718f4844eb797e5d3750c0bfba9150a7866b7"
+UPSTREAM_BASE_SHA = "ea07dccb67aeb92ebde851ac31503b4bf457a318"
+# Retained as a public compatibility alias for callers that displayed the old field.
+UPSTREAM_SHA = UPSTREAM_BASE_SHA
 LAUNCHD_LABEL = "com.hermanzhaozzzz.pytdxfeed.tdx-api"
 LEGACY_VQT_LABEL = "com.hermanzhaozzzz.vqt.tdx-api"
 RUNTIME_DIRNAME = ".pytdxfeed"
@@ -50,6 +53,8 @@ class ServiceInfo:
     managed: bool
     launchd_label: str | None
     runtime_root: Path | None
+    source_sha: str | None
+    upstream_base_sha: str | None
     upstream_sha: str | None
     artifact_generation: int | None
 
@@ -209,6 +214,10 @@ class _RuntimeManager:
         return (
             deployed_api == expected_api
             and deployed_generation >= expected_generation
+            and (
+                deployed_generation > expected_generation
+                or deployment.get("source_sha") == assets["source_sha"]
+            )
             and int(deployment.get("service_port", 0) or 0) == self.port
             and self.binary_path.is_file()
             and self.static_path.is_dir()
@@ -306,12 +315,14 @@ class _RuntimeManager:
                 _copy_missing_tree(source_data, self.data_path)
 
         deployment = {
-            "schema_version": 2,
+            "schema_version": 3,
             "api_major": int(asset_manifest["api_major"]),
             "artifact_generation": int(asset_manifest["artifact_generation"]),
             "package_version": __version__,
-            "upstream_sha": str(asset_manifest["upstream_sha"]),
-            "patches": list(asset_manifest.get("patches") or []),
+            "source_url": str(asset_manifest["source_url"]),
+            "source_sha": str(asset_manifest["source_sha"]),
+            "upstream_url": str(asset_manifest["upstream_url"]),
+            "upstream_base_sha": str(asset_manifest["upstream_base_sha"]),
             "architecture": architecture,
             "asset_filename": filename,
             "asset_sha256": expected_checksum,
@@ -343,7 +354,9 @@ class _RuntimeManager:
 
         old_shared = self.home_dir / LEGACY_RUNTIME_DIRNAME
         old_manifest = self._read_json(old_shared / "deployment.json")
-        if old_manifest is not None and old_manifest.get("upstream_sha"):
+        if old_manifest is not None and (
+            old_manifest.get("source_sha") or old_manifest.get("upstream_sha")
+        ):
             sources.append(old_shared / "data" / "database")
 
         for source in sources:
@@ -500,7 +513,15 @@ class _RuntimeManager:
             managed=True,
             launchd_label=LAUNCHD_LABEL,
             runtime_root=self.runtime_root,
-            upstream_sha=str(deployment.get("upstream_sha") or UPSTREAM_SHA),
+            source_sha=(str(deployment.get("source_sha") or "") or None),
+            upstream_base_sha=str(
+                deployment.get("upstream_base_sha") or UPSTREAM_BASE_SHA
+            ),
+            upstream_sha=str(
+                deployment.get("upstream_base_sha")
+                or deployment.get("upstream_sha")
+                or UPSTREAM_BASE_SHA
+            ),
             artifact_generation=int(deployment.get("artifact_generation", 0) or 0),
         )
 
@@ -512,6 +533,8 @@ def _external_service_info(port: int) -> ServiceInfo:
         managed=False,
         launchd_label=None,
         runtime_root=None,
+        source_sha=None,
+        upstream_base_sha=None,
         upstream_sha=None,
         artifact_generation=None,
     )
@@ -525,9 +548,14 @@ def _load_asset_manifest() -> dict[str, Any]:
         raise TdxApiDeploymentError(
             f"[pytdxfeed] bundled asset manifest is invalid: {exc}"
         ) from exc
-    if not isinstance(payload, dict) or payload.get("upstream_sha") != UPSTREAM_SHA:
+    if (
+        not isinstance(payload, dict)
+        or payload.get("schema_version") != 2
+        or payload.get("source_sha") != SOURCE_SHA
+        or payload.get("upstream_base_sha") != UPSTREAM_BASE_SHA
+    ):
         raise TdxApiDeploymentError(
-            "[pytdxfeed] bundled asset manifest does not match the locked upstream"
+            "[pytdxfeed] bundled asset manifest does not match the locked source"
         )
     return payload
 
