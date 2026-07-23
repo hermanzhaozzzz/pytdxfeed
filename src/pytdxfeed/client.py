@@ -86,13 +86,16 @@ class TdxApiClient:
         source: str,
         interval: str,
         limit: int | None = None,
+        end_date: str | None = None,
     ) -> object:
-        """Return all stock K-lines from the explicit tdx or ths endpoint."""
+        """Return stock K-lines, optionally bounded by an as-of date."""
         if source not in {"tdx", "ths"}:
             raise ValueError("source must be 'tdx' or 'ths'")
         params: dict[str, object] = {"code": _required(code, "code"), "type": interval}
         if limit is not None and limit > 0:
             params["limit"] = int(limit)
+        if end_date:
+            params["end_date"] = str(end_date)
         return self._request_json("GET", f"/api/kline-all/{source}", params=params)
 
     def index_all(

@@ -164,7 +164,7 @@ def test_acceptable_loaded_runtime_waits_for_health_without_redeploying(
         json.dumps(
             {
                 "api_major": 1,
-                "artifact_generation": 4,
+                "artifact_generation": 5,
                 "service_port": 8080,
                 "source_sha": runtime.SOURCE_SHA,
                 "upstream_base_sha": runtime.UPSTREAM_BASE_SHA,
@@ -216,7 +216,7 @@ def test_acceptable_loaded_runtime_health_timeout_never_redeploys(
         json.dumps(
             {
                 "api_major": 1,
-                "artifact_generation": 4,
+                "artifact_generation": 5,
                 "service_port": 8080,
                 "source_sha": runtime.SOURCE_SHA,
             }
@@ -278,7 +278,7 @@ def test_bundled_asset_manifest_and_checksums_are_valid() -> None:
     asset_root = Path(runtime.__file__).parent / "assets"
     assert manifest["source_sha"] == runtime.SOURCE_SHA
     assert manifest["upstream_base_sha"] == runtime.UPSTREAM_BASE_SHA
-    assert manifest["artifact_generation"] == 4
+    assert manifest["artifact_generation"] == 5
     assert "patches" not in manifest
     for asset in manifest["assets"].values():
         path = asset_root / asset["filename"]

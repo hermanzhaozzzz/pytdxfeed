@@ -1,6 +1,6 @@
 [project]
 name = "pytdxfeed"
-version = "1.0.2"
+version = "1.0.3"
 description = "Python client and macOS service manager for a local tdx-api market data service."
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
@@ -28,7 +28,7 @@ Homepage = "https://pypi.org/project/pytdxfeed/"
 Repository = "https://github.com/hermanzhaozzzz/pytdxfeed"
 Issues = "https://github.com/hermanzhaozzzz/pytdxfeed/issues"
 Releases = "https://github.com/hermanzhaozzzz/pytdxfeed/releases"
-"Bundled tdx-api" = "https://github.com/hermanzhaozzzz/tdx-api/commit/10e718f4844eb797e5d3750c0bfba9150a7866b7"
+"Bundled tdx-api" = "https://github.com/hermanzhaozzzz/tdx-api/commit/e6778c6b8ec4cbf0705dc1fe4c3c413a6b6518ff"
 
 [dependency-groups]
 dev = [

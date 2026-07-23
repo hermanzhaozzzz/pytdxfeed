@@ -161,7 +161,7 @@ with TdxApiClient(timeout_sec=3.0) as client:
 | `ensure_service()` | `port=8080`、`timeout_sec=2.0`、`startup_timeout_sec=120.0` | 服务生命周期和 `/api/health` |
 | `TdxApiClient()` | `timeout_sec=10.0`、`port=8080` | 为每个线程创建独立 HTTP session |
 | `health()` | 无 | `GET /api/health` |
-| `kline_all()` | `code`、`source`、`interval`、可选 `limit` | `GET /api/kline-all/{tdx|ths}` |
+| `kline_all()` | `code`、`source`、`interval`、可选 `limit` 和 `end_date` | `GET /api/kline-all/{tdx|ths}` |
 | `index_all()` | `code`、`interval`、可选 `limit` | `GET /api/index/all` |
 | `batch_quote()` | 1-50 个代码 | `POST /api/batch-quote` |
 | `trade()` | 一个代码 | `GET /api/trade` |
@@ -169,6 +169,10 @@ with TdxApiClient(timeout_sec=3.0) as client:
 代码使用上游要求的小写交易所前缀，例如 `sh600000`、`sz000001`、
 `bj920002`。返回值保持上游 JSON 原样；pytdxfeed 不重命名字段、不缩放价格，
 也不转换为 pandas 对象。
+
+`end_date` 是显式的历史截止日期（`YYYY-MM-DD`）。对 THS 前复权请求，它会
+隔离仍在发布中的更新尾部，避免较新的不稳定数据阻断已经完成的历史日期；
+同日 raw/qfq 的严格核验规则不变。
 
 ### K 线覆盖范围
 
@@ -239,17 +243,17 @@ except TdxApiDeploymentError as exc:
 
 ### 内置 tdx-api 版本
 
-| 项目 | v1.0.2 使用值 |
+| 项目 | v1.0.3 使用值 |
 |---|---|
 | 源码仓库 | [`hermanzhaozzzz/tdx-api`](https://github.com/hermanzhaozzzz/tdx-api) |
-| 源码 commit | [`10e718f4844eb797e5d3750c0bfba9150a7866b7`](https://github.com/hermanzhaozzzz/tdx-api/commit/10e718f4844eb797e5d3750c0bfba9150a7866b7) |
+| 源码 commit | [`e6778c6b8ec4cbf0705dc1fe4c3c413a6b6518ff`](https://github.com/hermanzhaozzzz/tdx-api/commit/e6778c6b8ec4cbf0705dc1fe4c3c413a6b6518ff) |
 | 上游仓库 | [`oficcejo/tdx-api`](https://github.com/oficcejo/tdx-api) |
 | 上游基线 | [`ea07dccb67aeb92ebde851ac31503b4bf457a318`](https://github.com/oficcejo/tdx-api/commit/ea07dccb67aeb92ebde851ac31503b4bf457a318) |
-| 源码 commit 日期 | 2026-07-22 |
+| 源码 commit 日期 | 2026-07-23 |
 | 服务 API major | `1` |
-| Artifact generation | `4` |
+| Artifact generation | `5` |
 | 内置架构 | `darwin-arm64`、`darwin-x86_64` |
-| 审核后的 fork 改动 | 严格的 `TDX_API_PORT`；THS 响应校验；经交叉核验的 qfq 收盘尾部 |
+| 审核后的 fork 改动 | 严格的 `TDX_API_PORT`；THS 响应校验；经交叉核验的 qfq 收盘尾部；历史 qfq `end_date` 隔离 |
 
 源码 fork 跟踪上游，并只保留通用实现。上游项目在 README 中声明使用 MIT
 License。pytdxfeed 自有源码和发布元数据使用 [MIT License](LICENSE)。

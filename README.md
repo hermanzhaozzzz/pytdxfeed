@@ -165,7 +165,7 @@ but does not claim exchange-native push delivery or lossless tick capture.
 | `ensure_service()` | `port=8080`, `timeout_sec=2.0`, `startup_timeout_sec=120.0` | Service lifecycle and `/api/health` |
 | `TdxApiClient()` | `timeout_sec=10.0`, `port=8080` | Creates thread-local HTTP sessions |
 | `health()` | None | `GET /api/health` |
-| `kline_all()` | `code`, `source`, `interval`, optional `limit` | `GET /api/kline-all/{tdx|ths}` |
+| `kline_all()` | `code`, `source`, `interval`, optional `limit` and `end_date` | `GET /api/kline-all/{tdx|ths}` |
 | `index_all()` | `code`, `interval`, optional `limit` | `GET /api/index/all` |
 | `batch_quote()` | Iterable of 1-50 codes | `POST /api/batch-quote` |
 | `trade()` | One code | `GET /api/trade` |
@@ -173,6 +173,10 @@ but does not claim exchange-native push delivery or lossless tick capture.
 Codes use the upstream lower-case exchange prefix, for example `sh600000`,
 `sz000001`, or `bj920002`. Responses are the upstream JSON objects; pytdxfeed
 does not rename fields, rescale prices, or convert results to pandas objects.
+
+`end_date` is an explicit historical as-of boundary (`YYYY-MM-DD`). For THS
+qfq requests it prevents a newer, still-publishing tail from invalidating an
+older completed date; it does not relax the same-date raw/qfq validation.
 
 ### K-line Coverage
 
@@ -249,17 +253,17 @@ generations are never downgraded.
 
 ### Bundled tdx-api
 
-| Item | v1.0.2 value |
+| Item | v1.0.3 value |
 |---|---|
 | Source repository | [`hermanzhaozzzz/tdx-api`](https://github.com/hermanzhaozzzz/tdx-api) |
-| Source commit | [`10e718f4844eb797e5d3750c0bfba9150a7866b7`](https://github.com/hermanzhaozzzz/tdx-api/commit/10e718f4844eb797e5d3750c0bfba9150a7866b7) |
+| Source commit | [`e6778c6b8ec4cbf0705dc1fe4c3c413a6b6518ff`](https://github.com/hermanzhaozzzz/tdx-api/commit/e6778c6b8ec4cbf0705dc1fe4c3c413a6b6518ff) |
 | Upstream repository | [`oficcejo/tdx-api`](https://github.com/oficcejo/tdx-api) |
 | Upstream base | [`ea07dccb67aeb92ebde851ac31503b4bf457a318`](https://github.com/oficcejo/tdx-api/commit/ea07dccb67aeb92ebde851ac31503b4bf457a318) |
-| Source commit date | 2026-07-22 |
+| Source commit date | 2026-07-23 |
 | Service API major | `1` |
-| Artifact generation | `4` |
+| Artifact generation | `5` |
 | Bundled architectures | `darwin-arm64`, `darwin-x86_64` |
-| Reviewed fork changes | Strict `TDX_API_PORT`; THS response validation; verified qfq close tail |
+| Reviewed fork changes | Strict `TDX_API_PORT`; THS response validation; verified qfq close tail; historical qfq `end_date` isolation |
 
 The source fork tracks the upstream project and preserves its general-purpose
 code only. The upstream project declares the MIT License in its README.

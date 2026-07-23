@@ -76,6 +76,22 @@ def test_client_endpoint_contracts() -> None:
     assert session.closed
 
 
+def test_kline_all_passes_historical_end_date() -> None:
+    session = Session([Response({"code": 0, "data": {"list": []}})])
+    with TdxApiClient(session_factory=lambda: session) as client:
+        client.kline_all(
+            "sz300749",
+            source="ths",
+            interval="day",
+            end_date="2026-07-22",
+        )
+    assert session.calls[0][2] == {
+        "code": "sz300749",
+        "type": "day",
+        "end_date": "2026-07-22",
+    }
+
+
 def test_client_uses_configured_local_port() -> None:
     session = Session([Response({"status": "healthy"})])
     client = TdxApiClient(port=18080, session_factory=lambda: session)

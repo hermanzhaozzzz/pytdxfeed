@@ -15,10 +15,10 @@ import tempfile
 from pathlib import Path
 
 SOURCE_URL = "https://github.com/hermanzhaozzzz/tdx-api.git"
-SOURCE_SHA = "10e718f4844eb797e5d3750c0bfba9150a7866b7"
+SOURCE_SHA = "e6778c6b8ec4cbf0705dc1fe4c3c413a6b6518ff"
 UPSTREAM_URL = "https://github.com/oficcejo/tdx-api.git"
 UPSTREAM_BASE_SHA = "ea07dccb67aeb92ebde851ac31503b4bf457a318"
-ARTIFACT_GENERATION = 4
+ARTIFACT_GENERATION = 5
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 GO_VERSION_RE = re.compile(r"\bgo(\d+)\.(\d+)(?:\.\d+)?\b")
 ARCHITECTURES = ("arm64", "x86_64")
