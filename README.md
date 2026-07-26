@@ -149,6 +149,8 @@ or increase the interval as the symbol count grows.
 | Index K-lines | `index_all()` | Full index history for one interval |
 | Quote snapshots | `batch_quote()` | 1-50 explicit symbols per request |
 | Recent trades | `trade()` | Polling snapshot of up to 1,800 recent transaction records |
+| Historical minute summary | `minute()` | One explicit `YYYYMMDD` trade date |
+| Historical daily trades | `minute_trade_all()` | All records returned for one explicit `YYYYMMDD` trade date |
 | Near-tick polling | `batch_quote()` + `trade()` | Caller-controlled polling with incremental trade detection |
 | macOS lifecycle | `ensure_service()` | Installs, upgrades, starts, migrates ports, and checks the LaunchAgent |
 | Other platforms | `ensure_service()` | Health-checks an existing service; it does not install one |
@@ -169,6 +171,8 @@ but does not claim exchange-native push delivery or lossless tick capture.
 | `index_all()` | `code`, `interval`, optional `limit` | `GET /api/index/all` |
 | `batch_quote()` | Iterable of 1-50 codes | `POST /api/batch-quote` |
 | `trade()` | One code | `GET /api/trade` |
+| `minute()` | `code`, `date=YYYYMMDD` | `GET /api/minute` |
+| `minute_trade_all()` | `code`, `date=YYYYMMDD` | `GET /api/minute-trade-all` |
 
 Codes use the upstream lower-case exchange prefix, for example `sh600000`,
 `sz000001`, or `bj920002`. Responses are the upstream JSON objects; pytdxfeed
@@ -253,7 +257,7 @@ generations are never downgraded.
 
 ### Bundled tdx-api
 
-| Item | v1.0.3 value |
+| Item | v1.0.4 value |
 |---|---|
 | Source repository | [`hermanzhaozzzz/tdx-api`](https://github.com/hermanzhaozzzz/tdx-api) |
 | Source commit | [`e6778c6b8ec4cbf0705dc1fe4c3c413a6b6518ff`](https://github.com/hermanzhaozzzz/tdx-api/commit/e6778c6b8ec4cbf0705dc1fe4c3c413a6b6518ff) |

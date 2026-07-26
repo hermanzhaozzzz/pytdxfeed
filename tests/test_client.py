@@ -92,6 +92,38 @@ def test_kline_all_passes_historical_end_date() -> None:
     }
 
 
+def test_historical_minute_endpoint_contracts() -> None:
+    session = Session(
+        [
+            Response({"code": 0, "data": {"List": []}}),
+            Response({"code": 0, "data": {"List": []}}),
+        ]
+    )
+    with TdxApiClient(session_factory=lambda: session) as client:
+        client.minute("sh600000", date="20250102")
+        client.minute_trade_all("sh600000", date="20250102")
+
+    assert session.calls[0][0:3] == (
+        "GET",
+        "http://127.0.0.1:8080/api/minute",
+        {"code": "sh600000", "date": "20250102"},
+    )
+    assert session.calls[1][0:3] == (
+        "GET",
+        "http://127.0.0.1:8080/api/minute-trade-all",
+        {"code": "sh600000", "date": "20250102"},
+    )
+
+
+@pytest.mark.parametrize("value", ["2025-01-02", "20250230", "", "abcdefgh"])
+def test_historical_minute_date_is_strict(value: str) -> None:
+    client = TdxApiClient()
+    with pytest.raises(ValueError, match="YYYYMMDD"):
+        client.minute("sh600000", date=value)
+    with pytest.raises(ValueError, match="YYYYMMDD"):
+        client.minute_trade_all("sh600000", date=value)
+
+
 def test_client_uses_configured_local_port() -> None:
     session = Session([Response({"status": "healthy"})])
     client = TdxApiClient(port=18080, session_factory=lambda: session)

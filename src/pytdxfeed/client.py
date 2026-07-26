@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
+from datetime import datetime
 from threading import Lock, local
 from typing import Any
 
@@ -122,6 +123,22 @@ class TdxApiClient:
             "GET", "/api/trade", params={"code": _required(code, "code")}
         )
 
+    def minute(self, code: str, *, date: str) -> object:
+        """Return the upstream historical minute summary for one trade date."""
+        return self._request_json(
+            "GET",
+            "/api/minute",
+            params={"code": _required(code, "code"), "date": _trade_date(date)},
+        )
+
+    def minute_trade_all(self, code: str, *, date: str) -> object:
+        """Return all upstream historical trades for one trade date."""
+        return self._request_json(
+            "GET",
+            "/api/minute-trade-all",
+            params={"code": _required(code, "code"), "date": _trade_date(date)},
+        )
+
     def _session(self) -> requests.Session:
         if self._closed:
             raise RuntimeError("TdxApiClient is closed")
@@ -173,4 +190,15 @@ def _required(value: object, field: str) -> str:
     text = str(value or "").strip()
     if not text:
         raise ValueError(f"{field} must not be empty")
+    return text
+
+
+def _trade_date(value: object) -> str:
+    text = str(value or "").strip()
+    if len(text) != 8 or not text.isascii() or not text.isdigit():
+        raise ValueError("date must use YYYYMMDD")
+    try:
+        datetime.strptime(text, "%Y%m%d")
+    except ValueError as exc:
+        raise ValueError("date must use YYYYMMDD") from exc
     return text

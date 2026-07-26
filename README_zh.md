@@ -145,6 +145,8 @@ with TdxApiClient(timeout_sec=3.0) as client:
 | 指数 K 线 | `index_all()` | 指定周期的指数历史数据 |
 | 批量行情快照 | `batch_quote()` | 每次明确传入 1-50 个标的 |
 | 最近逐笔成交 | `trade()` | 轮询获取最多 1,800 条最近逐笔记录 |
+| 历史分钟摘要 | `minute()` | 一个明确的 `YYYYMMDD` 交易日 |
+| 历史逐笔成交 | `minute_trade_all()` | 一个明确的 `YYYYMMDD` 交易日内接口返回的全部记录 |
 | 接近 tick 的轮询 | `batch_quote()` + `trade()` | 调用方控制轮询频率并增量识别逐笔成交 |
 | macOS 服务管理 | `ensure_service()` | 安装、升级、启动、迁移端口并检查 LaunchAgent |
 | 其他操作系统 | `ensure_service()` | 只检查已有服务，不自动安装 |
@@ -165,6 +167,8 @@ with TdxApiClient(timeout_sec=3.0) as client:
 | `index_all()` | `code`、`interval`、可选 `limit` | `GET /api/index/all` |
 | `batch_quote()` | 1-50 个代码 | `POST /api/batch-quote` |
 | `trade()` | 一个代码 | `GET /api/trade` |
+| `minute()` | `code`、`date=YYYYMMDD` | `GET /api/minute` |
+| `minute_trade_all()` | `code`、`date=YYYYMMDD` | `GET /api/minute-trade-all` |
 
 代码使用上游要求的小写交易所前缀，例如 `sh600000`、`sz000001`、
 `bj920002`。返回值保持上游 JSON 原样；pytdxfeed 不重命名字段、不缩放价格，
@@ -243,7 +247,7 @@ except TdxApiDeploymentError as exc:
 
 ### 内置 tdx-api 版本
 
-| 项目 | v1.0.3 使用值 |
+| 项目 | v1.0.4 使用值 |
 |---|---|
 | 源码仓库 | [`hermanzhaozzzz/tdx-api`](https://github.com/hermanzhaozzzz/tdx-api) |
 | 源码 commit | [`e6778c6b8ec4cbf0705dc1fe4c3c413a6b6518ff`](https://github.com/hermanzhaozzzz/tdx-api/commit/e6778c6b8ec4cbf0705dc1fe4c3c413a6b6518ff) |
