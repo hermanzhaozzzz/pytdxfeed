@@ -11,6 +11,7 @@ import requests
 
 from pytdxfeed import (
     DEFAULT_PORT,
+    MAX_CONCURRENT_MARKET_DATA_REQUESTS,
     TdxApiClient,
     TdxApiResponseError,
     TdxApiTransportError,
@@ -172,6 +173,10 @@ def test_client_rejects_invalid_port(port: object) -> None:
 
 def test_client_default_port_is_8080() -> None:
     assert TdxApiClient().port == DEFAULT_PORT == 8080
+
+
+def test_market_data_concurrency_contract_is_six() -> None:
+    assert MAX_CONCURRENT_MARKET_DATA_REQUESTS == 6
 
 
 def test_business_error_is_not_retried() -> None:

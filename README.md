@@ -157,6 +157,11 @@ or increase the interval as the symbol count grows.
 | Push tick stream | Not available | No WebSocket, server-side subscription, or exchange event stream |
 | Storage API | Not available | The package returns upstream JSON and does not write user market data |
 
+The bundled service supports at most
+`MAX_CONCURRENT_MARKET_DATA_REQUESTS == 6` concurrent market-data requests.
+Consumers must bound their worker pools to this exported limit; health and
+lifecycle checks are not market-data requests.
+
 pytdxfeed therefore supports near-tick polling and transaction-level records,
 but does not claim exchange-native push delivery or lossless tick capture.
 
@@ -257,7 +262,7 @@ generations are never downgraded.
 
 ### Bundled tdx-api
 
-| Item | v1.0.4 value |
+| Item | v1.0.5 value |
 |---|---|
 | Source repository | [`hermanzhaozzzz/tdx-api`](https://github.com/hermanzhaozzzz/tdx-api) |
 | Source commit | [`e6778c6b8ec4cbf0705dc1fe4c3c413a6b6518ff`](https://github.com/hermanzhaozzzz/tdx-api/commit/e6778c6b8ec4cbf0705dc1fe4c3c413a6b6518ff) |

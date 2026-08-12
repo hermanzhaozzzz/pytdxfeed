@@ -156,6 +156,10 @@ with TdxApiClient(timeout_sec=3.0) as client:
 因此 pytdxfeed 支持接近 tick 的轮询和逐笔级别记录，但不宣称提供交易所原生推送
 或无损 tick 采集。
 
+内置服务最多支持 `MAX_CONCURRENT_MARKET_DATA_REQUESTS == 6` 个并发行情请求。
+消费者必须用这个公开上限约束自己的 worker pool；健康检查和生命周期检查不计入
+行情请求。
+
 ### 公开方法
 
 | 方法 | 主要参数 | 上游接口 |
@@ -247,7 +251,7 @@ except TdxApiDeploymentError as exc:
 
 ### 内置 tdx-api 版本
 
-| 项目 | v1.0.4 使用值 |
+| 项目 | v1.0.5 使用值 |
 |---|---|
 | 源码仓库 | [`hermanzhaozzzz/tdx-api`](https://github.com/hermanzhaozzzz/tdx-api) |
 | 源码 commit | [`e6778c6b8ec4cbf0705dc1fe4c3c413a6b6518ff`](https://github.com/hermanzhaozzzz/tdx-api/commit/e6778c6b8ec4cbf0705dc1fe4c3c413a6b6518ff) |

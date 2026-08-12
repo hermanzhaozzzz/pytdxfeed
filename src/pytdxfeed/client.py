@@ -13,6 +13,7 @@ from pytdxfeed.errors import TdxApiResponseError, TdxApiTransportError
 
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8080
+MAX_CONCURRENT_MARKET_DATA_REQUESTS = 6
 
 
 def validate_port(port: object) -> int:
