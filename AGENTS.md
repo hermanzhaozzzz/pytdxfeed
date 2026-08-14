@@ -14,6 +14,24 @@
 - Before pushing, run `uv run ruff check .`, `uv run ruff format --check .`,
   `uv run pytest`, `uv build`, and distribution metadata checks.
 
+## Release and legal boundaries
+
+- `pytdxfeed` is public, redistributable infrastructure. Formal fixes to its
+  Python API, runtime manager, HTTP client, release metadata, or bundled
+  `tdx-api` assets must be released through the public GitHub repository and
+  PyPI with the same version and distributions; do not leave a formal fix only
+  on a local branch, private commit, or downstream runtime patch.
+- `vnpy_ths` has a separate legal boundary: it may be hosted and versioned only
+  in its private GitHub repository. Never publish `vnpy_ths` to PyPI, a public
+  GitHub repository, public GitHub Releases, or another public package index.
+  VQT must consume an exact commit from that private repository.
+- This publication boundary does not relax downstream synchronization. Every
+  public `pytdxfeed` release still requires exact-version dependency and lock
+  updates in both `vnpy_ths` and VQT, plus updated rolling compatibility markers
+  in both downstream `AGENTS.md` files. Every private `vnpy_ths` release still
+  requires VQT's exact Git revision, lock file, and compatibility marker to be
+  updated together.
+
 ## tdx-api release audit
 
 - Bundled binaries are built from an exact commit of
