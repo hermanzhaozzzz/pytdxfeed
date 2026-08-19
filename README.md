@@ -262,17 +262,17 @@ generations are never downgraded.
 
 ### Bundled tdx-api
 
-| Item | v1.0.5 value |
+| Item | v1.0.6 value |
 |---|---|
 | Source repository | [`hermanzhaozzzz/tdx-api`](https://github.com/hermanzhaozzzz/tdx-api) |
-| Source commit | [`e6778c6b8ec4cbf0705dc1fe4c3c413a6b6518ff`](https://github.com/hermanzhaozzzz/tdx-api/commit/e6778c6b8ec4cbf0705dc1fe4c3c413a6b6518ff) |
+| Source commit | [`d71acd09af286fec9a77726e24fcffd975bed3e0`](https://github.com/hermanzhaozzzz/tdx-api/commit/d71acd09af286fec9a77726e24fcffd975bed3e0) |
 | Upstream repository | [`oficcejo/tdx-api`](https://github.com/oficcejo/tdx-api) |
 | Upstream base | [`ea07dccb67aeb92ebde851ac31503b4bf457a318`](https://github.com/oficcejo/tdx-api/commit/ea07dccb67aeb92ebde851ac31503b4bf457a318) |
-| Source commit date | 2026-07-23 |
+| Source commit date | 2026-08-19 |
 | Service API major | `1` |
-| Artifact generation | `5` |
+| Artifact generation | `6` |
 | Bundled architectures | `darwin-arm64`, `darwin-x86_64` |
-| Reviewed fork changes | Strict `TDX_API_PORT`; THS response validation; verified qfq close tail; historical qfq `end_date` isolation |
+| Reviewed fork changes | Strict `TDX_API_PORT`; THS response validation; verified qfq close tail; historical qfq `end_date` isolation; code-cache readiness gate |
 
 The source fork tracks the upstream project and preserves its general-purpose
 code only. The upstream project declares the MIT License in its README.

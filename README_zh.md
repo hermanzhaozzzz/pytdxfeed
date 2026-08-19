@@ -251,17 +251,17 @@ except TdxApiDeploymentError as exc:
 
 ### 内置 tdx-api 版本
 
-| 项目 | v1.0.5 使用值 |
+| 项目 | v1.0.6 使用值 |
 |---|---|
 | 源码仓库 | [`hermanzhaozzzz/tdx-api`](https://github.com/hermanzhaozzzz/tdx-api) |
-| 源码 commit | [`e6778c6b8ec4cbf0705dc1fe4c3c413a6b6518ff`](https://github.com/hermanzhaozzzz/tdx-api/commit/e6778c6b8ec4cbf0705dc1fe4c3c413a6b6518ff) |
+| 源码 commit | [`d71acd09af286fec9a77726e24fcffd975bed3e0`](https://github.com/hermanzhaozzzz/tdx-api/commit/d71acd09af286fec9a77726e24fcffd975bed3e0) |
 | 上游仓库 | [`oficcejo/tdx-api`](https://github.com/oficcejo/tdx-api) |
 | 上游基线 | [`ea07dccb67aeb92ebde851ac31503b4bf457a318`](https://github.com/oficcejo/tdx-api/commit/ea07dccb67aeb92ebde851ac31503b4bf457a318) |
-| 源码 commit 日期 | 2026-07-23 |
+| 源码 commit 日期 | 2026-08-19 |
 | 服务 API major | `1` |
-| Artifact generation | `5` |
+| Artifact generation | `6` |
 | 内置架构 | `darwin-arm64`、`darwin-x86_64` |
-| 审核后的 fork 改动 | 严格的 `TDX_API_PORT`；THS 响应校验；经交叉核验的 qfq 收盘尾部；历史 qfq `end_date` 隔离 |
+| 审核后的 fork 改动 | 严格的 `TDX_API_PORT`；THS 响应校验；经交叉核验的 qfq 收盘尾部；历史 qfq `end_date` 隔离；代码表就绪门禁 |
 
 源码 fork 跟踪上游，并只保留通用实现。上游项目在 README 中声明使用 MIT
 License。pytdxfeed 自有源码和发布元数据使用 [MIT License](LICENSE)。

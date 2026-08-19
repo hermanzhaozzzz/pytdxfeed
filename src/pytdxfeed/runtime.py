@@ -31,7 +31,7 @@ from pytdxfeed.client import (
 from pytdxfeed.errors import TdxApiDeploymentError, TdxApiError
 
 PORT = DEFAULT_PORT
-SOURCE_SHA = "e6778c6b8ec4cbf0705dc1fe4c3c413a6b6518ff"
+SOURCE_SHA = "d71acd09af286fec9a77726e24fcffd975bed3e0"
 UPSTREAM_BASE_SHA = "ea07dccb67aeb92ebde851ac31503b4bf457a318"
 # Retained as a public compatibility alias for callers that displayed the old field.
 UPSTREAM_SHA = UPSTREAM_BASE_SHA
