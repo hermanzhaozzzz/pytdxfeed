@@ -109,6 +109,24 @@ class TdxApiClient:
             params["limit"] = int(limit)
         return self._request_json("GET", "/api/index/all", params=params)
 
+    def recent_minute_bars(self, code: str, *, limit: int = 240) -> object:
+        """Read a bounded page of raw 1m OHLCV, including any forming bar.
+
+        Unlike kline_all, this endpoint limits the upstream TDX request itself.
+        Consumers must exclude the unfinished minute using the source timestamp.
+        """
+        if (
+            isinstance(limit, bool)
+            or not isinstance(limit, int)
+            or not 1 <= limit <= 800
+        ):
+            raise ValueError("limit must be an integer between 1 and 800")
+        return self._request_json(
+            "GET",
+            "/api/kline-history",
+            params={"code": _required(code, "code"), "type": "minute1", "limit": limit},
+        )
+
     def batch_quote(self, codes: Iterable[str]) -> object:
         """Return a raw quote response for at most 50 explicit API codes."""
         items = [_required(code, "code") for code in codes]

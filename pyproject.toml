@@ -1,6 +1,6 @@
 [project]
 name = "pytdxfeed"
-version = "1.0.6"
+version = "1.0.7"
 description = "Python client and macOS service manager for a local tdx-api market data service."
 readme = "README.md"
 requires-python = ">=3.11,<3.14"

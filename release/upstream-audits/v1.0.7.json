@@ -1,0 +1,62 @@
+{
+  "api_major": 1,
+  "artifact_generation": 6,
+  "audited_at": "2026-09-11T07:48:18.544028+00:00",
+  "downstream_reviews": [
+    {
+      "action": "upgrade exact pytdxfeed dependency and lock file; run gateway tests; update rolling compatibility marker",
+      "repository": "vnpy_ths"
+    },
+    {
+      "action": "upgrade exact pytdxfeed dependency and lock file; upgrade exact vnpy_ths revision and lock file; run live regression tests; update rolling compatibility marker",
+      "repository": "VQT"
+    }
+  ],
+  "fork_commits": [
+    {
+      "required": true,
+      "sha": "013e6009d1cdb3a1768ba80b5334c89c945205a2",
+      "summary": "configurable local service port"
+    },
+    {
+      "required": true,
+      "sha": "bf99438fb5658eb64003d45cfc6e1b620c522016",
+      "summary": "strict THS HTTP and JSONP response validation"
+    },
+    {
+      "required": true,
+      "sha": "10e718f4844eb797e5d3750c0bfba9150a7866b7",
+      "summary": "strict post-close THS qfq daily-tail completion and TDX cross-check"
+    },
+    {
+      "required": true,
+      "sha": "e6778c6b8ec4cbf0705dc1fe4c3c413a6b6518ff",
+      "summary": "historical THS qfq as-of boundary that isolates newer unstable tails"
+    },
+    {
+      "required": true,
+      "sha": "d71acd09af286fec9a77726e24fcffd975bed3e0",
+      "summary": "fail startup and health readiness when the code cache is unavailable"
+    }
+  ],
+  "package_version": "1.0.7",
+  "schema_version": 1,
+  "source_sha": "d71acd09af286fec9a77726e24fcffd975bed3e0",
+  "source_url": "https://github.com/hermanzhaozzzz/tdx-api.git",
+  "upstream_base_sha": "ea07dccb67aeb92ebde851ac31503b4bf457a318",
+  "upstream_head_sha": "ea07dccb67aeb92ebde851ac31503b4bf457a318",
+  "upstream_review": {
+    "api_changes": [
+      "The health endpoint returns HTTP 503 until the shared code cache is initialized."
+    ],
+    "data_semantic_changes": [],
+    "decision": "retain_required_fork_commits",
+    "dependency_changes": [],
+    "new_capabilities": [
+      "recent_minute_bars fetches at most 800 native 1m bars without full-history scanning."
+    ],
+    "reason": "Upstream HEAD is unchanged. Add a public bounded raw minute client method using the existing kline-history endpoint; no binary or market-data semantics change."
+  },
+  "upstream_tags": [],
+  "upstream_url": "https://github.com/oficcejo/tdx-api.git"
+}

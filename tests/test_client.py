@@ -116,6 +116,24 @@ def test_historical_minute_endpoint_contracts() -> None:
     )
 
 
+def test_recent_minutes_request_is_bounded_at_the_source() -> None:
+    payload = {"code": 0, "data": {"List": [], "Count": 0}}
+    session = Session([Response(payload)])
+    with TdxApiClient(session_factory=lambda: session) as client:
+        assert client.recent_minute_bars("sh501018", limit=3) == payload
+    assert session.calls[0][0:3] == (
+        "GET",
+        "http://127.0.0.1:8080/api/kline-history",
+        {"code": "sh501018", "type": "minute1", "limit": 3},
+    )
+
+
+@pytest.mark.parametrize("limit", [0, 801, -1, True, 1.5])
+def test_recent_minutes_rejects_unbounded_or_noninteger_limit(limit) -> None:
+    with TdxApiClient() as client, pytest.raises(ValueError, match="limit"):
+        client.recent_minute_bars("sh501018", limit=limit)
+
+
 @pytest.mark.parametrize("value", ["2025-01-02", "20250230", "", "abcdefgh"])
 def test_historical_minute_date_is_strict(value: str) -> None:
     client = TdxApiClient()

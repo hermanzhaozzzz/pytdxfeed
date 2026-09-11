@@ -251,7 +251,7 @@ except TdxApiDeploymentError as exc:
 
 ### 内置 tdx-api 版本
 
-| 项目 | v1.0.6 使用值 |
+| 项目 | v1.0.7 使用值 |
 |---|---|
 | 源码仓库 | [`hermanzhaozzzz/tdx-api`](https://github.com/hermanzhaozzzz/tdx-api) |
 | 源码 commit | [`d71acd09af286fec9a77726e24fcffd975bed3e0`](https://github.com/hermanzhaozzzz/tdx-api/commit/d71acd09af286fec9a77726e24fcffd975bed3e0) |
@@ -335,3 +335,5 @@ MIT，详见 [LICENSE](LICENSE)。
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=hermanzhaozzzz/pytdxfeed&type=Date)](https://www.star-history.com/#hermanzhaozzzz/pytdxfeed&Date)
+
+`client.recent_minute_bars("sh600000", limit=240)` 直接取最近 1–800 根原生 raw 分钟线，不扫描全历史。响应为 `data.List`，可能包含尚未结束的分钟；消费完成分钟时须检查来源时间。

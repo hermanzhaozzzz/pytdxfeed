@@ -262,7 +262,7 @@ generations are never downgraded.
 
 ### Bundled tdx-api
 
-| Item | v1.0.6 value |
+| Item | v1.0.7 value |
 |---|---|
 | Source repository | [`hermanzhaozzzz/tdx-api`](https://github.com/hermanzhaozzzz/tdx-api) |
 | Source commit | [`d71acd09af286fec9a77726e24fcffd975bed3e0`](https://github.com/hermanzhaozzzz/tdx-api/commit/d71acd09af286fec9a77726e24fcffd975bed3e0) |
@@ -351,3 +351,5 @@ MIT. See [LICENSE](LICENSE).
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=hermanzhaozzzz/pytdxfeed&type=Date)](https://www.star-history.com/#hermanzhaozzzz/pytdxfeed&Date)
+
+`client.recent_minute_bars("sh600000", limit=240)` fetches a bounded page of raw 1m bars (1–800). The response uses `data.List` and may include an unfinished minute; consumers must check the source timestamps before using completed bars.
