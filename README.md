@@ -157,6 +157,8 @@ or increase the interval as the symbol count grows.
 | Push tick stream | Not available | No WebSocket, server-side subscription, or exchange event stream |
 | Storage API | Not available | The package returns upstream JSON and does not write user market data |
 
+For raw TDX daily bars, `limit` values from 1 to 799 limit the upstream fetch as well as the response. One extra bar preserves the oldest returned bar's previous close.
+
 The bundled service supports at most
 `MAX_CONCURRENT_MARKET_DATA_REQUESTS == 6` concurrent market-data requests.
 Consumers must bound their worker pools to this exported limit; health and
@@ -262,15 +264,15 @@ generations are never downgraded.
 
 ### Bundled tdx-api
 
-| Item | v1.0.7 value |
+| Item | v1.0.8 value |
 |---|---|
 | Source repository | [`hermanzhaozzzz/tdx-api`](https://github.com/hermanzhaozzzz/tdx-api) |
-| Source commit | [`d71acd09af286fec9a77726e24fcffd975bed3e0`](https://github.com/hermanzhaozzzz/tdx-api/commit/d71acd09af286fec9a77726e24fcffd975bed3e0) |
+| Source commit | [`38b1af37e16b0aa84e88cb88cb0a75f8d05e407e`](https://github.com/hermanzhaozzzz/tdx-api/commit/38b1af37e16b0aa84e88cb88cb0a75f8d05e407e) |
 | Upstream repository | [`oficcejo/tdx-api`](https://github.com/oficcejo/tdx-api) |
 | Upstream base | [`ea07dccb67aeb92ebde851ac31503b4bf457a318`](https://github.com/oficcejo/tdx-api/commit/ea07dccb67aeb92ebde851ac31503b4bf457a318) |
 | Source commit date | 2026-08-19 |
 | Service API major | `1` |
-| Artifact generation | `6` |
+| Artifact generation | `7` |
 | Bundled architectures | `darwin-arm64`, `darwin-x86_64` |
 | Reviewed fork changes | Strict `TDX_API_PORT`; THS response validation; verified qfq close tail; historical qfq `end_date` isolation; code-cache readiness gate |
 

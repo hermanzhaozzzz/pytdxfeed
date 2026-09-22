@@ -82,7 +82,7 @@ def main() -> None:
     downstream = audit.get("downstream_reviews")
     _require(
         isinstance(downstream, list)
-        and {item.get("repository") for item in downstream} == {"vnpy_ths", "VQT"},
+        and {item.get("repository") for item in downstream} == {"vqt_ths", "VQT"},
         "both downstream reviews are required",
     )
 

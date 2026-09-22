@@ -153,6 +153,8 @@ with TdxApiClient(timeout_sec=3.0) as client:
 | 推送式 tick 流 | 不支持 | 没有 WebSocket、服务端订阅或交易所事件流 |
 | 行情存储 API | 不支持 | 返回上游 JSON，不替用户写入行情数据库 |
 
+TDX 原始日线的 `limit` 在 1～799 时，同时限制源端取数；额外读取一根，以保留返回首日的昨收价。
+
 因此 pytdxfeed 支持接近 tick 的轮询和逐笔级别记录，但不宣称提供交易所原生推送
 或无损 tick 采集。
 
@@ -251,15 +253,15 @@ except TdxApiDeploymentError as exc:
 
 ### 内置 tdx-api 版本
 
-| 项目 | v1.0.7 使用值 |
+| 项目 | v1.0.8 使用值 |
 |---|---|
 | 源码仓库 | [`hermanzhaozzzz/tdx-api`](https://github.com/hermanzhaozzzz/tdx-api) |
-| 源码 commit | [`d71acd09af286fec9a77726e24fcffd975bed3e0`](https://github.com/hermanzhaozzzz/tdx-api/commit/d71acd09af286fec9a77726e24fcffd975bed3e0) |
+| 源码 commit | [`38b1af37e16b0aa84e88cb88cb0a75f8d05e407e`](https://github.com/hermanzhaozzzz/tdx-api/commit/38b1af37e16b0aa84e88cb88cb0a75f8d05e407e) |
 | 上游仓库 | [`oficcejo/tdx-api`](https://github.com/oficcejo/tdx-api) |
 | 上游基线 | [`ea07dccb67aeb92ebde851ac31503b4bf457a318`](https://github.com/oficcejo/tdx-api/commit/ea07dccb67aeb92ebde851ac31503b4bf457a318) |
 | 源码 commit 日期 | 2026-08-19 |
 | 服务 API major | `1` |
-| Artifact generation | `6` |
+| Artifact generation | `7` |
 | 内置架构 | `darwin-arm64`、`darwin-x86_64` |
 | 审核后的 fork 改动 | 严格的 `TDX_API_PORT`；THS 响应校验；经交叉核验的 qfq 收盘尾部；历史 qfq `end_date` 隔离；代码表就绪门禁 |
 

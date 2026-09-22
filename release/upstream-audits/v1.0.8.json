@@ -1,0 +1,65 @@
+{
+  "api_major": 1,
+  "artifact_generation": 7,
+  "audited_at": "2026-09-22T07:33:27.055880+00:00",
+  "downstream_reviews": [
+    {
+      "repository": "vqt_ths",
+      "action": "Upgrade exact pytdxfeed dependency and lock; run full broker regressions. Public Python API and raw OHLCV semantics remain unchanged."
+    },
+    {
+      "repository": "VQT",
+      "action": "Upgrade exact pytdxfeed and vqt_ths dependencies and lock; verify current-day raw daily/minute source contracts. No strategy or formal qfq path changes."
+    }
+  ],
+  "fork_commits": [
+    {
+      "required": true,
+      "sha": "013e6009d1cdb3a1768ba80b5334c89c945205a2",
+      "summary": "configurable local service port"
+    },
+    {
+      "required": true,
+      "sha": "bf99438fb5658eb64003d45cfc6e1b620c522016",
+      "summary": "strict THS HTTP and JSONP response validation"
+    },
+    {
+      "required": true,
+      "sha": "10e718f4844eb797e5d3750c0bfba9150a7866b7",
+      "summary": "strict post-close THS qfq daily-tail completion and TDX cross-check"
+    },
+    {
+      "required": true,
+      "sha": "e6778c6b8ec4cbf0705dc1fe4c3c413a6b6518ff",
+      "summary": "historical THS qfq as-of boundary that isolates newer unstable tails"
+    },
+    {
+      "required": true,
+      "sha": "d71acd09af286fec9a77726e24fcffd975bed3e0",
+      "summary": "fail startup and health readiness when the code cache is unavailable"
+    },
+    {
+      "required": true,
+      "sha": "38b1af37e16b0aa84e88cb88cb0a75f8d05e407e",
+      "summary": "Bound raw TDX daily requests before network fetch while preserving previous-close fields"
+    }
+  ],
+  "package_version": "1.0.8",
+  "schema_version": 1,
+  "source_sha": "38b1af37e16b0aa84e88cb88cb0a75f8d05e407e",
+  "source_url": "https://github.com/hermanzhaozzzz/tdx-api.git",
+  "upstream_base_sha": "ea07dccb67aeb92ebde851ac31503b4bf457a318",
+  "upstream_head_sha": "ea07dccb67aeb92ebde851ac31503b4bf457a318",
+  "upstream_review": {
+    "api_changes": [],
+    "data_semantic_changes": [],
+    "dependency_changes": [],
+    "new_capabilities": [
+      "Raw TDX daily limit 1..799 performs one bounded upstream request instead of scanning full history."
+    ],
+    "decision": "retain_required_fork_commits",
+    "reason": "Fetched upstream main and tags; upstream HEAD remains ea07dccb67aeb92ebde851ac31503b4bf457a318. Retain required fork fixes and bound existing raw daily endpoint. Five real symbols including stock, fund and BSE showed exact returned-tail equality including previous close."
+  },
+  "upstream_tags": [],
+  "upstream_url": "https://github.com/oficcejo/tdx-api.git"
+}

@@ -21,14 +21,14 @@
   `tdx-api` assets must be released through the public GitHub repository and
   PyPI with the same version and distributions; do not leave a formal fix only
   on a local branch, private commit, or downstream runtime patch.
-- `vnpy_ths` has a separate legal boundary: it may be hosted and versioned only
-  in its private GitHub repository. Never publish `vnpy_ths` to PyPI, a public
+- `vqt_ths` has a separate legal boundary: it may be hosted and versioned only
+  in its private GitHub repository. Never publish `vqt_ths` to PyPI, a public
   GitHub repository, public GitHub Releases, or another public package index.
   VQT must consume an exact commit from that private repository.
 - This publication boundary does not relax downstream synchronization. Every
   public `pytdxfeed` release still requires exact-version dependency and lock
-  updates in both `vnpy_ths` and VQT, plus updated rolling compatibility markers
-  in both downstream `AGENTS.md` files. Every private `vnpy_ths` release still
+  updates in both `vqt_ths` and VQT, plus updated rolling compatibility markers
+  in both downstream `AGENTS.md` files. Every private `vqt_ths` release still
   requires VQT's exact Git revision, lock file, and compatibility marker to be
   updated together.
 
@@ -43,14 +43,14 @@
   upstream HEAD. The review must cover Go code, dependencies, HTTP contracts,
   market-data semantics, and newly available capabilities.
 - Record the reviewed upstream HEAD, the adopt/defer decision and reason, each
-  still-required fork commit, and the compatibility impact for `vnpy_ths` and
+  still-required fork commit, and the compatibility impact for `vqt_ths` and
   VQT in `release/upstream-audits/vMAJOR.MINOR.PATCH.json`.
 - A release is blocked when its audit record, package version, fork source SHA,
   upstream HEAD, asset manifest, API major, artifact generation, or asset
   checksums disagree. The release workflow must verify the live upstream and
   fork refs before publication.
 - Every released version requires an exact dependency and lock-file update in
-  `vnpy_ths` and VQT plus a rolling compatibility marker in each downstream
+  `vqt_ths` and VQT plus a rolling compatibility marker in each downstream
   `AGENTS.md`, even when the audit concludes that no code adaptation is needed.
 - After an upstream qfq change is merged, update `upstream-main` and rebuild
   fork `main` so the equivalent local commit is removed or replayed from the

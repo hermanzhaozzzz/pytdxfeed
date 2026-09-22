@@ -90,7 +90,11 @@ class TdxApiClient:
         limit: int | None = None,
         end_date: str | None = None,
     ) -> object:
-        """Return stock K-lines, optionally bounded by an as-of date."""
+        """Return stock K-lines, optionally bounded by an as-of date.
+
+        Raw TDX daily limits below 800 bound the upstream request itself;
+        the service reads one extra bar to preserve the oldest previous close.
+        """
         if source not in {"tdx", "ths"}:
             raise ValueError("source must be 'tdx' or 'ths'")
         params: dict[str, object] = {"code": _required(code, "code"), "type": interval}
