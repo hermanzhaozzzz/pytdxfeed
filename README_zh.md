@@ -269,7 +269,7 @@ tdx-api 子进程后也随之退出。
 
 ### 内置 tdx-api 版本
 
-| 项目 | v1.0.9 使用值 |
+| 项目 | v1.0.10 使用值 |
 |---|---|
 | 源码仓库 | [`hermanzhaozzzz/tdx-api`](https://github.com/hermanzhaozzzz/tdx-api) |
 | 源码 commit | [`f7902b27f30e73c8d791c102ad6c715be81015d4`](https://github.com/hermanzhaozzzz/tdx-api/commit/f7902b27f30e73c8d791c102ad6c715be81015d4) |

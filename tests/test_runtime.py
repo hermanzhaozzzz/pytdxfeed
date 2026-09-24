@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import plistlib
 import select
 import signal
@@ -210,7 +211,8 @@ def test_unhealthy_unknown_listener_is_never_stopped(tmp_path: Path, monkeypatch
 _FAKE_SERVICE = """\
 import json
 import os
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler
+from socketserver import TCPServer
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -220,8 +222,10 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-HTTPServer.allow_reuse_address = True
-HTTPServer(("127.0.0.1", int(os.environ["TDX_API_PORT"])), Handler).serve_forever()
+# HTTPServer performs reverse DNS before listen(); this fixture only needs HTTP
+# handling on a numeric loopback socket, independent of the runner's resolver.
+TCPServer.allow_reuse_address = True
+TCPServer(("127.0.0.1", int(os.environ["TDX_API_PORT"])), Handler).serve_forever()
 """
 
 _CALLER = """\
@@ -425,23 +429,16 @@ def test_joining_caller_stops_waiting_when_helper_exits(tmp_path, monkeypatch):
     assert "startup timeout=" not in str(error.value)
 
 
-def test_short_lived_child_exits_helper_and_explicit_ensure_can_restart(
+def test_exited_child_releases_helper_and_explicit_ensure_can_restart(
     managed_service,
 ):
     manager, start, ready = managed_service
-    short_lived = _FAKE_SERVICE.replace(
-        "HTTPServer.allow_reuse_address = True",
-        "import threading\n"
-        "threading.Timer(0.6, lambda: os._exit(0)).start()\n"
-        "HTTPServer.allow_reuse_address = True",
-    )
-    manager.binary_path.write_text(f"#!{sys.executable}\n" + short_lived)
     caller = start()
     with TdxApiClient(port=manager.port) as client:
         first_pid = client.health()["pid"]
+        os.kill(first_pid, signal.SIGTERM)
         _wait_for(lambda: not manager._service_running())
         assert not runtime._port_open(manager.port)
-        manager.binary_path.write_text(f"#!{sys.executable}\n" + _FAKE_SERVICE)
         caller.stdin.write("ensure\n")
         caller.stdin.flush()
         ready(caller)

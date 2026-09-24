@@ -282,7 +282,7 @@ Newer compatible artifact generations are never downgraded.
 
 ### Bundled tdx-api
 
-| Item | v1.0.9 value |
+| Item | v1.0.10 value |
 |---|---|
 | Source repository | [`hermanzhaozzzz/tdx-api`](https://github.com/hermanzhaozzzz/tdx-api) |
 | Source commit | [`f7902b27f30e73c8d791c102ad6c715be81015d4`](https://github.com/hermanzhaozzzz/tdx-api/commit/f7902b27f30e73c8d791c102ad6c715be81015d4) |
