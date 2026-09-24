@@ -26,11 +26,11 @@
   GitHub repository, public GitHub Releases, or another public package index.
   VQT must consume an exact commit from that private repository.
 - This publication boundary does not relax downstream synchronization. Every
-  public `pytdxfeed` release still requires exact-version dependency and lock
-  updates in both `vqt_ths` and VQT, plus updated rolling compatibility markers
-  in both downstream `AGENTS.md` files. Every private `vqt_ths` release still
-  requires VQT's exact Git revision, lock file, and compatibility marker to be
-  updated together.
+  public `pytdxfeed` release requires an exact-version dependency, lock-file,
+  and rolling compatibility-marker update in VQT. `vqt_ths` is broker-only and
+  does not depend on `pytdxfeed`; review it only when its broker interface is
+  affected. Every private `vqt_ths` release still requires VQT's exact Git
+  revision, lock file, and compatibility marker to be updated together.
 
 ## tdx-api release audit
 
@@ -50,8 +50,8 @@
   checksums disagree. The release workflow must verify the live upstream and
   fork refs before publication.
 - Every released version requires an exact dependency and lock-file update in
-  `vqt_ths` and VQT plus a rolling compatibility marker in each downstream
-  `AGENTS.md`, even when the audit concludes that no code adaptation is needed.
+  VQT plus its rolling compatibility marker, even when no code adaptation is
+  needed. Review `vqt_ths` only when its broker interface is affected.
 - After an upstream qfq change is merged, update `upstream-main` and rebuild
   fork `main` so the equivalent local commit is removed or replayed from the
   upstream implementation rather than maintained twice.
@@ -61,8 +61,11 @@
 - The service host is fixed at `127.0.0.1`; the explicit service port defaults
   to `8080` and may be configured by consumers. Do not add configurable hosts,
   base URLs, automatic free-port selection, or alternate service fallback.
-- The macOS runtime root is fixed at `~/.pytdxfeed` and the LaunchAgent label is
-  `com.hermanzhaozzzz.pytdxfeed.tdx-api`.
+- The macOS runtime root is fixed at `~/.pytdxfeed`. Its service follows the
+  calling Python processes: shared file locks keep it alive until the last
+  caller exits. Do not register a LaunchAgent, login startup, or crash restart.
+  Only the verified old `com.hermanzhaozzzz.pytdxfeed.tdx-api` LaunchAgent may be
+  unloaded during migration; preserve its runtime assets and data.
 - Never kill or reuse an unhealthy unknown configured-port owner. A strictly
   healthy unknown tdx-api service on the configured port may be used without
   taking ownership.

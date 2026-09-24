@@ -1,18 +1,18 @@
 {
   "api_major": 1,
-  "artifact_generation": 7,
+  "artifact_generation": 8,
   "assets": {
     "arm64": {
-      "filename": "tdx-api-38b1af37e16b-darwin-arm64.tar.gz",
-      "sha256": "64b3215e69e769655487c518a1930e23b0b4655da4b65474e9c36cf523a2412f"
+      "filename": "tdx-api-f7902b27f30e-darwin-arm64.tar.gz",
+      "sha256": "81cf06302da7cb5a00aa1dce542841eaf9fa03b4baf6d6b78f3c749575d450f2"
     },
     "x86_64": {
-      "filename": "tdx-api-38b1af37e16b-darwin-x86_64.tar.gz",
-      "sha256": "75025c30107d961fe80eca3dae8a25fdfc02a622040795c30eab342d8a7657cf"
+      "filename": "tdx-api-f7902b27f30e-darwin-x86_64.tar.gz",
+      "sha256": "a3b95878ec1f0641c2b367b79b3f0d9f052cd399d5038e76101cc6c1e7fcf21d"
     }
   },
   "schema_version": 2,
-  "source_sha": "38b1af37e16b0aa84e88cb88cb0a75f8d05e407e",
+  "source_sha": "f7902b27f30e73c8d791c102ad6c715be81015d4",
   "source_url": "https://github.com/hermanzhaozzzz/tdx-api.git",
   "upstream_base_sha": "ea07dccb67aeb92ebde851ac31503b4bf457a318",
   "upstream_url": "https://github.com/oficcejo/tdx-api.git"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import atexit
 import fcntl
 import hashlib
 import json
@@ -11,6 +12,7 @@ import plistlib
 import shutil
 import socket
 import subprocess
+import sys
 import tarfile
 import tempfile
 import time
@@ -18,6 +20,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
+from threading import RLock
 from typing import Any
 
 from pytdxfeed._version import __version__
@@ -31,17 +34,52 @@ from pytdxfeed.client import (
 from pytdxfeed.errors import TdxApiDeploymentError, TdxApiError
 
 PORT = DEFAULT_PORT
-SOURCE_SHA = "38b1af37e16b0aa84e88cb88cb0a75f8d05e407e"
+SOURCE_SHA = "f7902b27f30e73c8d791c102ad6c715be81015d4"
 UPSTREAM_BASE_SHA = "ea07dccb67aeb92ebde851ac31503b4bf457a318"
 # Retained as a public compatibility alias for callers that displayed the old field.
 UPSTREAM_SHA = UPSTREAM_BASE_SHA
 LAUNCHD_LABEL = "com.hermanzhaozzzz.pytdxfeed.tdx-api"
-LEGACY_VQT_LABEL = "com.hermanzhaozzzz.vqt.tdx-api"
 RUNTIME_DIRNAME = ".pytdxfeed"
-LEGACY_RUNTIME_DIRNAME = ".tdx-api"
 ASSET_MANIFEST = "manifest.json"
 STARTUP_TIMEOUT_SEC = 120.0
 PORT_RELEASE_TIMEOUT_SEC = 5.0
+
+
+# One shared file lock per calling Python process; the OS releases it on exit.
+_PROCESS_LEASES: dict[Path, int] = {}
+_SERVICE_PROCESSES: list[subprocess.Popen] = []
+_PROCESS_LOCK = RLock()
+
+
+def _close_process_leases() -> None:
+    for descriptor in _PROCESS_LEASES.values():
+        os.close(descriptor)
+    _PROCESS_LEASES.clear()
+
+
+def _reap_service_processes() -> None:
+    _SERVICE_PROCESSES[:] = [
+        process for process in _SERVICE_PROCESSES if process.poll() is None
+    ]
+
+
+def _after_fork() -> None:
+    global _PROCESS_LOCK
+    _close_process_leases()
+    for process in _SERVICE_PROCESSES:
+        # Discard copied handles without acquiring inherited Popen thread locks.
+        # The real parent's handles and return codes are in separate memory.
+        process.returncode = 0
+    _SERVICE_PROCESSES.clear()
+    _PROCESS_LOCK = RLock()
+
+
+atexit.register(_close_process_leases)
+os.register_at_fork(
+    before=lambda: _PROCESS_LOCK.acquire(),
+    after_in_parent=lambda: _PROCESS_LOCK.release(),
+    after_in_child=_after_fork,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,7 +103,7 @@ def ensure_service(
     startup_timeout_sec: float = STARTUP_TIMEOUT_SEC,
     port: int = DEFAULT_PORT,
 ) -> ServiceInfo:
-    """Return a healthy service, deploying the shared runtime on macOS if needed."""
+    """Keep a healthy local service alive until all calling Python processes exit."""
     resolved_port = validate_port(port)
     client = TdxApiClient(timeout_sec=timeout_sec, port=resolved_port)
     try:
@@ -108,16 +146,12 @@ class _RuntimeManager:
         self.lock_path = self.runtime_root / "deployment.lock"
         self.stdout_log_path = self.logs_path / "tdx-api.stdout.log"
         self.stderr_log_path = self.logs_path / "tdx-api.stderr.log"
-        self.install_log_path = self.logs_path / "deployment.log"
+        self.users_path = self.runtime_root / "users.lock"
+        self.service_lock_path = self.runtime_root / "service.lock"
         self.plist_path = (
             self.home_dir / "Library" / "LaunchAgents" / f"{LAUNCHD_LABEL}.plist"
         )
-        self.legacy_vqt_plist_path = (
-            self.home_dir / "Library" / "LaunchAgents" / f"{LEGACY_VQT_LABEL}.plist"
-        )
-        self.domain = f"gui/{os.getuid()}"
-        self.service_target = f"{self.domain}/{LAUNCHD_LABEL}"
-        self.legacy_vqt_target = f"{self.domain}/{LEGACY_VQT_LABEL}"
+        self.service_target = f"gui/{os.getuid()}/{LAUNCHD_LABEL}"
         self.startup_timeout_sec = float(startup_timeout_sec)
         self.port = validate_port(port)
         self.base_url = local_base_url(self.port)
@@ -125,77 +159,125 @@ class _RuntimeManager:
             raise ValueError("startup_timeout_sec must be positive")
 
     def ensure(self) -> ServiceInfo:
-        """Reconcile the single per-user service."""
-        new_loaded = self._job_loaded(self.service_target)
-        legacy_loaded = self._job_loaded(self.legacy_vqt_target)
-        if not new_loaded and not legacy_loaded and self._healthy():
-            return _external_service_info(self.port)
-
-        self._prepare_directories()
-        with self.lock_path.open("a+", encoding="utf-8") as lock_file:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-            try:
+        """Share a subprocess while at least one caller holds a lease."""
+        with _PROCESS_LOCK:
+            _reap_service_processes()
+            if (
+                not self.plist_path.exists()
+                and not self._service_running()
+                and self._healthy()
+            ):
+                return _external_service_info(self.port)
+            self._prepare_directories()
+            with self.lock_path.open("a+", encoding="utf-8") as lock_file:
+                fcntl.flock(lock_file, fcntl.LOCK_EX)
                 return self._ensure_locked()
-            finally:
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
     def _ensure_locked(self) -> ServiceInfo:
-        new_loaded = self._job_loaded(self.service_target)
-        legacy_loaded = self._job_loaded(self.legacy_vqt_target)
-        healthy = self._healthy()
-        asset_manifest = _load_asset_manifest()
+        self._retire_launchagent()
         deployment = self._read_json(self.manifest_path)
-        deployed_port = self._deployed_port(deployment)
-
-        if legacy_loaded:
-            self._seed_legacy_data()
-            return self._deploy(
-                asset_manifest,
-                old_target=self.legacy_vqt_target,
-                old_plist=self.legacy_vqt_plist_path,
-                remove_legacy_plist=True,
-                old_port=DEFAULT_PORT,
+        running = self._service_running()
+        if running and deployment and deployment.get("service_port") != self.port:
+            if self._healthy():
+                return _external_service_info(self.port)
+            raise TdxApiDeploymentError(
+                "[pytdxfeed] another Python process is using the managed service "
+                f"on port {deployment.get('service_port')}; "
+                f"cannot move it to {self.port}"
             )
-
-        if new_loaded:
-            acceptable = self._deployment_acceptable(deployment, asset_manifest)
-            if acceptable:
-                if not healthy:
-                    self._wait_until_healthy()
-                return self._managed_service_info(deployment)
-            if deployed_port != self.port:
-                if healthy:
-                    self._retire_managed_service(deployed_port)
-                    return _external_service_info(self.port)
-                if _port_open(self.port):
-                    raise TdxApiDeploymentError(
-                        f"[pytdxfeed] {HOST}:{self.port} is occupied by an "
-                        "unhealthy unknown process; it will not be reused or terminated"
-                    )
-            return self._deploy(
-                asset_manifest,
-                old_target=self.service_target,
-                old_plist=self.plist_path,
-                remove_legacy_plist=False,
-                old_port=deployed_port,
-            )
-
-        if healthy:
+        if not running and self._healthy():
             return _external_service_info(self.port)
-        if _port_open(self.port):
+        if not running and _port_open(self.port):
             raise TdxApiDeploymentError(
                 f"[pytdxfeed] {HOST}:{self.port} is occupied by an unhealthy "
                 "unknown process; it will not be reused or terminated"
             )
 
-        self._seed_legacy_data()
-        return self._deploy(
-            asset_manifest,
-            old_target=None,
-            old_plist=None,
-            remove_legacy_plist=False,
-            old_port=None,
-        )
+        assets = _load_asset_manifest()
+        acceptable = self._deployment_acceptable(deployment, assets)
+        if running and not acceptable:
+            raise TdxApiDeploymentError(
+                "[pytdxfeed] the managed service is in use with different assets; "
+                "exit its current Python callers before upgrading"
+            )
+
+        acquired = self.runtime_root not in _PROCESS_LEASES
+        if acquired:
+            descriptor = os.open(self.users_path, os.O_RDWR | os.O_CREAT, 0o600)
+            fcntl.flock(descriptor, fcntl.LOCK_SH)
+            _PROCESS_LEASES[self.runtime_root] = descriptor
+        try:
+            if running:
+                self._wait_until_healthy()
+            else:
+                if not acceptable:
+                    deployment = self._install_asset(assets)
+                self._start_service()
+            return self._managed_service_info(deployment)
+        except BaseException:
+            if acquired:
+                os.close(_PROCESS_LEASES.pop(self.runtime_root))
+            raise
+
+    def _service_running(self) -> bool:
+        if not self.service_lock_path.exists():
+            return False
+        with self.service_lock_path.open("r+") as lock_file:
+            try:
+                fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return True
+        return False
+
+    def _start_service(self) -> None:
+        with (
+            self.stdout_log_path.open("ab") as stdout,
+            self.stderr_log_path.open("ab") as stderr,
+        ):
+            process = subprocess.Popen(  # noqa: S603 - package helper, explicit argv
+                [
+                    sys.executable,
+                    str(Path(__file__).with_name("_service.py")),
+                    str(self.runtime_root),
+                    str(self.port),
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=stdout,
+                stderr=stderr,
+                close_fds=True,
+                start_new_session=True,
+            )
+        _SERVICE_PROCESSES.append(process)
+        self._wait_until_healthy(process)
+        _reap_service_processes()
+
+    def _retire_launchagent(self) -> None:
+        """Remove only the old LaunchAgent whose executable matches this runtime."""
+        if not self.plist_path.exists():
+            return
+        payload = _read_plist(self.plist_path)
+        if (
+            not payload
+            or payload.get("Label") != LAUNCHD_LABEL
+            or payload.get("ProgramArguments") != [str(self.binary_path)]
+            or payload.get("WorkingDirectory") != str(self.runtime_root)
+        ):
+            raise TdxApiDeploymentError(
+                "[pytdxfeed] cannot verify old LaunchAgent ownership: "
+                f"{self.plist_path}"
+            )
+        state = self._launchctl(["print", self.service_target], check=False)
+        if state.returncode == 0:
+            if f"program = {self.binary_path}" not in {
+                line.strip() for line in state.stdout.splitlines()
+            }:
+                raise TdxApiDeploymentError(
+                    "[pytdxfeed] loaded LaunchAgent does not match the managed binary"
+                )
+            old_port = self._deployed_port(self._read_json(self.manifest_path))
+            self._launchctl(["bootout", self.service_target])
+            self._wait_for_port_release(old_port)
+        self.plist_path.unlink()
 
     def _deployment_acceptable(
         self, deployment: Mapping[str, Any] | None, assets: Mapping[str, Any]
@@ -222,59 +304,6 @@ class _RuntimeManager:
             and self.binary_path.is_file()
             and self.static_path.is_dir()
         )
-
-    def _deploy(
-        self,
-        asset_manifest: Mapping[str, Any],
-        *,
-        old_target: str | None,
-        old_plist: Path | None,
-        remove_legacy_plist: bool,
-        old_port: int | None,
-    ) -> ServiceInfo:
-        old_plist_bytes = _read_bytes(old_plist) if old_plist is not None else None
-        with tempfile.TemporaryDirectory(
-            prefix="rollback-", dir=self.runtime_root
-        ) as rollback_text:
-            rollback = Path(rollback_text)
-            self._snapshot_runtime(rollback)
-            try:
-                deployment = self._install_asset(asset_manifest)
-                desired_plist = plistlib.dumps(self._plist_payload(), sort_keys=True)
-                _write_bytes_atomic(self.plist_path, desired_plist, mode=0o644)
-                if old_target is not None and self._job_loaded(old_target):
-                    self._launchctl(["bootout", old_target])
-                    self._wait_for_port_release(old_port or self.port)
-                if _port_open(self.port):
-                    raise TdxApiDeploymentError(
-                        f"[pytdxfeed] port {self.port} became occupied before bootstrap"
-                    )
-                self._launchctl(["bootstrap", self.domain, str(self.plist_path)])
-                self._launchctl(["kickstart", "-k", self.service_target])
-                self._wait_until_healthy()
-            except Exception as exc:
-                self._launchctl(["bootout", self.service_target], check=False)
-                self._restore_runtime(rollback)
-                if old_plist is not None and old_plist_bytes is not None:
-                    _write_bytes_atomic(old_plist, old_plist_bytes, mode=0o644)
-                    self._launchctl(
-                        ["bootstrap", self.domain, str(old_plist)], check=False
-                    )
-                    if old_target is not None:
-                        self._launchctl(["kickstart", "-k", old_target], check=False)
-                if isinstance(exc, TdxApiDeploymentError):
-                    raise
-                raise TdxApiDeploymentError(
-                    f"[pytdxfeed] deployment failed: {exc}"
-                ) from exc
-
-        if (
-            remove_legacy_plist
-            and old_plist is not None
-            and old_plist != self.plist_path
-        ):
-            old_plist.unlink(missing_ok=True)
-        return self._managed_service_info(deployment)
 
     def _install_asset(self, asset_manifest: Mapping[str, Any]) -> dict[str, Any]:
         architecture = _architecture()
@@ -344,71 +373,16 @@ class _RuntimeManager:
         staged.replace(self.static_path)
         shutil.rmtree(previous, ignore_errors=True)
 
-    def _seed_legacy_data(self) -> None:
-        sources: list[Path] = []
-        legacy_payload = _read_plist(self.legacy_vqt_plist_path)
-        if legacy_payload is not None:
-            working = str(legacy_payload.get("WorkingDirectory") or "").strip()
-            if working:
-                sources.append(Path(working).expanduser() / "data" / "database")
-
-        old_shared = self.home_dir / LEGACY_RUNTIME_DIRNAME
-        old_manifest = self._read_json(old_shared / "deployment.json")
-        if old_manifest is not None and (
-            old_manifest.get("source_sha") or old_manifest.get("upstream_sha")
-        ):
-            sources.append(old_shared / "data" / "database")
-
-        for source in sources:
-            _copy_missing_tree(source, self.data_path)
-
-    def _snapshot_runtime(self, target: Path) -> None:
-        if self.binary_path.is_file():
-            (target / "bin").mkdir(parents=True, exist_ok=True)
-            shutil.copy2(self.binary_path, target / "bin" / "tdx-api")
-        if self.static_path.is_dir():
-            shutil.copytree(self.static_path, target / "static")
-        if self.manifest_path.is_file():
-            shutil.copy2(self.manifest_path, target / "deployment.json")
-
-    def _restore_runtime(self, source: Path) -> None:
-        backup_binary = source / "bin" / "tdx-api"
-        if backup_binary.is_file():
-            shutil.copy2(backup_binary, self.binary_path)
-            self.binary_path.chmod(0o755)
-        backup_static = source / "static"
-        if backup_static.is_dir():
-            self._replace_static(backup_static)
-        backup_manifest = source / "deployment.json"
-        if backup_manifest.is_file():
-            shutil.copy2(backup_manifest, self.manifest_path)
-
     def _prepare_directories(self) -> None:
         for path in (
             self.runtime_root,
             self.binary_path.parent,
             self.data_path,
             self.logs_path,
-            self.plist_path.parent,
         ):
             path.mkdir(parents=True, exist_ok=True)
         self.stdout_log_path.touch(exist_ok=True)
         self.stderr_log_path.touch(exist_ok=True)
-        self.install_log_path.touch(exist_ok=True)
-
-    def _plist_payload(self) -> dict[str, object]:
-        return {
-            "Label": LAUNCHD_LABEL,
-            "ProgramArguments": [str(self.binary_path)],
-            "EnvironmentVariables": {"TDX_API_PORT": str(self.port)},
-            "WorkingDirectory": str(self.runtime_root),
-            "RunAtLoad": True,
-            "KeepAlive": True,
-            "ThrottleInterval": 30,
-            "ProcessType": "Standard",
-            "StandardOutPath": str(self.stdout_log_path),
-            "StandardErrorPath": str(self.stderr_log_path),
-        }
 
     def _wait_for_port_release(self, port: int) -> None:
         deadline = time.monotonic() + PORT_RELEASE_TIMEOUT_SEC
@@ -418,12 +392,6 @@ class _RuntimeManager:
             raise TdxApiDeploymentError(
                 f"[pytdxfeed] LaunchAgent stopped but port {port} is still occupied"
             )
-
-    def _retire_managed_service(self, deployed_port: int) -> None:
-        """Stop a known managed job before reusing a healthy external service."""
-        self._launchctl(["bootout", self.service_target])
-        self._wait_for_port_release(deployed_port)
-        self.plist_path.unlink(missing_ok=True)
 
     def _deployed_port(self, deployment: Mapping[str, Any] | None) -> int:
         """Read the last managed port without guessing from an unknown process."""
@@ -449,25 +417,35 @@ class _RuntimeManager:
                     pass
         return DEFAULT_PORT
 
-    def _wait_until_healthy(self) -> None:
-        deadline = time.monotonic() + self.startup_timeout_sec
+    def _wait_until_healthy(self, process: subprocess.Popen | None = None) -> None:
+        started = time.monotonic()
+        deadline = started + self.startup_timeout_sec
         last_error: Exception | None = None
+        failure = (
+            "service did not become healthy "
+            f"(startup timeout={self.startup_timeout_sec:g}s)"
+        )
         while time.monotonic() < deadline:
+            if process is not None:
+                exit_code = process.poll()
+                if exit_code is not None:
+                    failure = (
+                        f"service exited before becoming healthy (exit={exit_code})"
+                    )
+                    break
+            elif not self._service_running():
+                failure = "managed service exited before becoming healthy"
+                break
             try:
                 self.client.health()
                 return
             except TdxApiError as exc:
                 last_error = exc
-                time.sleep(0.5)
-        launch_state = self._launchctl(
-            ["print", self.service_target], check=False
-        ).stdout
-        stderr_tail = _tail_file(self.stderr_log_path)
+                time.sleep(0.1)
         raise TdxApiDeploymentError(
-            "[pytdxfeed] service did not become healthy within "
-            f"{self.startup_timeout_sec:.0f}s; last_error={last_error}\n"
-            f"launchctl:\n{_tail_text(launch_state)}\n"
-            f"stderr:\n{stderr_tail}"
+            f"[pytdxfeed] {failure}; elapsed={time.monotonic() - started:.1f}s; "
+            f"last_error={last_error}\n"
+            f"stderr:\n{_tail_file(self.stderr_log_path)}"
         )
 
     def _healthy(self) -> bool:
@@ -476,9 +454,6 @@ class _RuntimeManager:
         except TdxApiError:
             return False
         return True
-
-    def _job_loaded(self, target: str) -> bool:
-        return self._launchctl(["print", target], check=False).returncode == 0
 
     def _launchctl(
         self, args: Sequence[str], *, check: bool = True
@@ -511,7 +486,7 @@ class _RuntimeManager:
             base_url=self.base_url,
             port=self.port,
             managed=True,
-            launchd_label=LAUNCHD_LABEL,
+            launchd_label=None,
             runtime_root=self.runtime_root,
             source_sha=(str(deployment.get("source_sha") or "") or None),
             upstream_base_sha=str(
@@ -640,15 +615,6 @@ def _read_plist(path: Path) -> dict[str, Any] | None:
     except (OSError, ValueError):
         return None
     return payload if isinstance(payload, dict) else None
-
-
-def _read_bytes(path: Path | None) -> bytes | None:
-    if path is None:
-        return None
-    try:
-        return path.read_bytes()
-    except OSError:
-        return None
 
 
 def _write_json_atomic(path: Path, payload: Mapping[str, Any]) -> None:

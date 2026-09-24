@@ -1,9 +1,9 @@
 [project]
 name = "pytdxfeed"
-version = "1.0.8"
+version = "1.0.9"
 description = "Python client and macOS service manager for a local tdx-api market data service."
 readme = "README.md"
-requires-python = ">=3.11,<3.14"
+requires-python = ">=3.13, <4"
 license = "MIT"
 authors = [
     { name = "Huanan Herman Zhao", email = "hermanzhaozzzz@gmail.com" },
@@ -14,9 +14,8 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: MacOS",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Office/Business :: Financial",
 ]
 dependencies = [
@@ -28,7 +27,7 @@ Homepage = "https://pypi.org/project/pytdxfeed/"
 Repository = "https://github.com/hermanzhaozzzz/pytdxfeed"
 Issues = "https://github.com/hermanzhaozzzz/pytdxfeed/issues"
 Releases = "https://github.com/hermanzhaozzzz/pytdxfeed/releases"
-"Bundled tdx-api" = "https://github.com/hermanzhaozzzz/tdx-api/commit/38b1af37e16b0aa84e88cb88cb0a75f8d05e407e"
+"Bundled tdx-api" = "https://github.com/hermanzhaozzzz/tdx-api/commit/f7902b27f30e73c8d791c102ad6c715be81015d4"
 
 [dependency-groups]
 dev = [
@@ -60,7 +59,7 @@ include = [
 
 [tool.ruff]
 line-length = 88
-target-version = "py311"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = ["A", "B", "C4", "D", "E", "F", "I", "N", "PERF", "RUF", "S", "SIM", "UP", "W"]

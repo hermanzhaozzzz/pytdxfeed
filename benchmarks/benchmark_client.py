@@ -11,7 +11,7 @@ import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
-from pytdxfeed import TdxApiClient
+from pytdxfeed import TdxApiClient, ensure_service
 
 
 @dataclass(frozen=True)
@@ -134,6 +134,7 @@ def print_results(results: Sequence[BenchmarkResult]) -> None:
 def main() -> None:
     """Run the standard local benchmark suite."""
     args = parse_args()
+    ensure_service(timeout_sec=args.timeout, port=args.port)
     with TdxApiClient(timeout_sec=args.timeout, port=args.port) as client:
         client.health()
         cases = (

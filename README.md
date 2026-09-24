@@ -17,7 +17,7 @@ is `8080`, and callers may select another explicit port.
 
 ## Installation
 
-Python 3.11-3.13 is supported.
+Python 3.13 or later (before Python 4) is required.
 
 ```bash
 uv add pytdxfeed
@@ -31,10 +31,11 @@ uv pip install pytdxfeed
 
 ## Quick Start
 
-On macOS, `ensure_service()` installs or upgrades the bundled service, registers
-its per-user LaunchAgent, waits for strict health, and returns its runtime
-details. On other operating systems it only verifies an already running local
-service.
+On macOS, `ensure_service()` installs or upgrades the bundled service, starts
+a subprocess, waits for strict health, and keeps it alive for the calling Python
+process. When several Python programs share the service, it stops after the last
+caller exits. It does not register a LaunchAgent or restart a crashed service.
+On other operating systems it only verifies an already running local service.
 
 ```python
 from pytdxfeed import TdxApiClient, ensure_service
@@ -84,7 +85,7 @@ both endpoints can provide near-tick behavior for a small symbol set:
 ```python
 from time import monotonic, sleep
 
-from pytdxfeed import TdxApiClient, TdxApiError
+from pytdxfeed import TdxApiClient, TdxApiError, ensure_service
 
 CODES = ("sh600000", "sz000001")
 POLL_INTERVAL_SEC = 1.0
@@ -106,6 +107,7 @@ def trade_key(row: dict) -> tuple:
 
 
 previous_windows: dict[str, set[tuple]] = {}
+ensure_service()
 
 with TdxApiClient(timeout_sec=3.0) as client:
     while True:
@@ -152,7 +154,7 @@ or increase the interval as the symbol count grows.
 | Historical minute summary | `minute()` | One explicit `YYYYMMDD` trade date |
 | Historical daily trades | `minute_trade_all()` | All records returned for one explicit `YYYYMMDD` trade date |
 | Near-tick polling | `batch_quote()` + `trade()` | Caller-controlled polling with incremental trade detection |
-| macOS lifecycle | `ensure_service()` | Installs, upgrades, starts, migrates ports, and checks the LaunchAgent |
+| macOS lifecycle | `ensure_service()` | Installs and shares a subprocess until the last calling Python process exits |
 | Other platforms | `ensure_service()` | Health-checks an existing service; it does not install one |
 | Push tick stream | Not available | No WebSocket, server-side subscription, or exchange event stream |
 | Storage API | Not available | The package returns upstream JSON and does not write user market data |
@@ -225,9 +227,11 @@ from pytdxfeed import (
     TdxApiDeploymentError,
     TdxApiResponseError,
     TdxApiTransportError,
+    ensure_service,
 )
 
 try:
+    ensure_service()
     with TdxApiClient(timeout_sec=10.0) as client:
         payload = client.kline_all(
             "sh600000",
@@ -255,26 +259,40 @@ incompatible response, startup fails without terminating that process.
 | Managed platforms | macOS arm64 and x86_64 |
 | Runtime root | `~/.pytdxfeed` |
 | Persistent service data | `~/.pytdxfeed/data/database` |
-| LaunchAgent label | `com.hermanzhaozzzz.pytdxfeed.tdx-api` |
+| Service lifetime | Until the last calling Python process exits |
 | Logs | `~/.pytdxfeed/logs` |
 
-Changing the configured port rebuilds the managed plist and restarts the owned
-service while preserving its data directory. Newer compatible artifact
-generations are never downgraded.
+Call `ensure_service()` in each Python program that needs the managed service.
+Closing an HTTP client does not end that program's service lifetime. Shared file
+locks track callers and are released by the operating system on normal exit,
+SIGTERM, or SIGKILL. Forked workers do not inherit ownership; a worker that needs
+an independent lifetime must call `ensure_service()` itself. A small subprocess
+waits for the last caller, stops its own tdx-api child, and exits too.
+
+No login startup or crash restart is installed. On first use, a matching old
+`com.hermanzhaozzzz.pytdxfeed.tdx-api` LaunchAgent is unloaded and its plist is
+removed after its executable and working directory are verified. The existing
+binary, data directory, and logs are retained. Unknown external services are
+never stopped when callers exit.
+
+The managed runtime still uses one explicit port per user. An active service
+cannot be moved or upgraded while another Python program uses it; after those
+programs exit, the next call can select a different port or install new assets.
+Newer compatible artifact generations are never downgraded.
 
 ### Bundled tdx-api
 
-| Item | v1.0.8 value |
+| Item | v1.0.9 value |
 |---|---|
 | Source repository | [`hermanzhaozzzz/tdx-api`](https://github.com/hermanzhaozzzz/tdx-api) |
-| Source commit | [`38b1af37e16b0aa84e88cb88cb0a75f8d05e407e`](https://github.com/hermanzhaozzzz/tdx-api/commit/38b1af37e16b0aa84e88cb88cb0a75f8d05e407e) |
+| Source commit | [`f7902b27f30e73c8d791c102ad6c715be81015d4`](https://github.com/hermanzhaozzzz/tdx-api/commit/f7902b27f30e73c8d791c102ad6c715be81015d4) |
 | Upstream repository | [`oficcejo/tdx-api`](https://github.com/oficcejo/tdx-api) |
 | Upstream base | [`ea07dccb67aeb92ebde851ac31503b4bf457a318`](https://github.com/oficcejo/tdx-api/commit/ea07dccb67aeb92ebde851ac31503b4bf457a318) |
-| Source commit date | 2026-08-19 |
+| Source commit date | 2026-09-24 |
 | Service API major | `1` |
-| Artifact generation | `7` |
+| Artifact generation | `8` |
 | Bundled architectures | `darwin-arm64`, `darwin-x86_64` |
-| Reviewed fork changes | Strict `TDX_API_PORT`; THS response validation; verified qfq close tail; historical qfq `end_date` isolation; code-cache readiness gate |
+| Reviewed fork changes | Strict `TDX_API_PORT`; THS response validation; verified qfq close tail; historical qfq `end_date` isolation; code-cache readiness gate; reuse valid startup caches; refresh only uncached workdays; bounded BSE HTTP requests |
 
 The source fork tracks the upstream project and preserves its general-purpose
 code only. The upstream project declares the MIT License in its README.

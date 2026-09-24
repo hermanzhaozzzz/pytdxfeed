@@ -17,7 +17,7 @@ HTTP 客户端读取行情；macOS 用户无需安装 Docker 或 Go 工具链，
 
 ## 安装
 
-支持 Python 3.11-3.13。
+要求 Python 3.13 或更高版本（低于 Python 4）。
 
 ```bash
 uv add pytdxfeed
@@ -31,9 +31,10 @@ uv pip install pytdxfeed
 
 ## 快速开始
 
-在 macOS 上，`ensure_service()` 会安装或升级内置服务、注册当前用户的
-LaunchAgent、等待严格健康检查通过，并返回运行信息。在其他操作系统上，它只会
-检查已有的本地服务，不负责部署。
+在 macOS 上，`ensure_service()` 会安装或升级内置服务，以子进程启动并等待
+严格健康检查通过，服务跟随调用它的 Python 程序运行。多个 Python 程序共享时，
+最后一个调用程序退出后服务才停止。不注册 LaunchAgent，也不在服务崩溃后自动
+重启。在其他操作系统上，它只检查已有的本地服务，不负责部署。
 
 ```python
 from pytdxfeed import TdxApiClient, ensure_service
@@ -82,7 +83,7 @@ with TdxApiClient(port=service.port) as client:
 ```python
 from time import monotonic, sleep
 
-from pytdxfeed import TdxApiClient, TdxApiError
+from pytdxfeed import TdxApiClient, TdxApiError, ensure_service
 
 CODES = ("sh600000", "sz000001")
 POLL_INTERVAL_SEC = 1.0
@@ -104,6 +105,7 @@ def trade_key(row: dict) -> tuple:
 
 
 previous_windows: dict[str, set[tuple]] = {}
+ensure_service()
 
 with TdxApiClient(timeout_sec=3.0) as client:
     while True:
@@ -148,7 +150,7 @@ with TdxApiClient(timeout_sec=3.0) as client:
 | 历史分钟摘要 | `minute()` | 一个明确的 `YYYYMMDD` 交易日 |
 | 历史逐笔成交 | `minute_trade_all()` | 一个明确的 `YYYYMMDD` 交易日内接口返回的全部记录 |
 | 接近 tick 的轮询 | `batch_quote()` + `trade()` | 调用方控制轮询频率并增量识别逐笔成交 |
-| macOS 服务管理 | `ensure_service()` | 安装、升级、启动、迁移端口并检查 LaunchAgent |
+| macOS 服务管理 | `ensure_service()` | 安装并共享子进程，最后一个调用 Python 程序退出后停止 |
 | 其他操作系统 | `ensure_service()` | 只检查已有服务，不自动安装 |
 | 推送式 tick 流 | 不支持 | 没有 WebSocket、服务端订阅或交易所事件流 |
 | 行情存储 API | 不支持 | 返回上游 JSON，不替用户写入行情数据库 |
@@ -216,9 +218,11 @@ from pytdxfeed import (
     TdxApiDeploymentError,
     TdxApiResponseError,
     TdxApiTransportError,
+    ensure_service,
 )
 
 try:
+    ensure_service()
     with TdxApiClient(timeout_sec=10.0) as client:
         payload = client.kline_all(
             "sh600000",
@@ -245,25 +249,37 @@ except TdxApiDeploymentError as exc:
 | 自动托管平台 | macOS arm64、x86_64 |
 | 运行目录 | `~/.pytdxfeed` |
 | 持久化服务数据 | `~/.pytdxfeed/data/database` |
-| LaunchAgent label | `com.hermanzhaozzzz.pytdxfeed.tdx-api` |
+| 服务生命周期 | 跟随调用它的 Python 程序，最后一个退出后停止 |
 | 日志目录 | `~/.pytdxfeed/logs` |
 
-切换配置端口时，pytdxfeed 会重建托管 plist 并重启自己管理的服务，保留行情数据
-目录。已经部署的兼容新版本资产不会被旧包降级。
+每个使用托管服务的 Python 程序都应调用 `ensure_service()`。关闭 HTTP 客户端
+不结束该程序的服务生命周期。程序持有共享文件锁，正常退出、SIGTERM 或 SIGKILL
+后由操作系统释放。fork worker 不继承所有权；需要独立使用服务的 worker 应自己
+调用 `ensure_service()`。一个轻量子进程等待最后一个调用者退出，停止自己启动的
+tdx-api 子进程后也随之退出。
+
+不再安装登录自启或崩溃重启机制。首次使用时，会核实旧的
+`com.hermanzhaozzzz.pytdxfeed.tdx-api` LaunchAgent 对应的可执行文件和工作目录，
+卸载匹配服务并删除其 plist。已有二进制、数据目录和日志继续保留。外部已有的
+健康服务仍可复用，调用者退出时不会停止它。
+
+同一用户的托管运行时仍只使用一个明确端口。有其他 Python 程序使用时，不会
+切换端口或升级并中断它们；这些程序退出后，下次调用可以更换端口或部署新资产。
+已经部署的兼容新版本资产不会被旧包降级。
 
 ### 内置 tdx-api 版本
 
-| 项目 | v1.0.8 使用值 |
+| 项目 | v1.0.9 使用值 |
 |---|---|
 | 源码仓库 | [`hermanzhaozzzz/tdx-api`](https://github.com/hermanzhaozzzz/tdx-api) |
-| 源码 commit | [`38b1af37e16b0aa84e88cb88cb0a75f8d05e407e`](https://github.com/hermanzhaozzzz/tdx-api/commit/38b1af37e16b0aa84e88cb88cb0a75f8d05e407e) |
+| 源码 commit | [`f7902b27f30e73c8d791c102ad6c715be81015d4`](https://github.com/hermanzhaozzzz/tdx-api/commit/f7902b27f30e73c8d791c102ad6c715be81015d4) |
 | 上游仓库 | [`oficcejo/tdx-api`](https://github.com/oficcejo/tdx-api) |
 | 上游基线 | [`ea07dccb67aeb92ebde851ac31503b4bf457a318`](https://github.com/oficcejo/tdx-api/commit/ea07dccb67aeb92ebde851ac31503b4bf457a318) |
-| 源码 commit 日期 | 2026-08-19 |
+| 源码 commit 日期 | 2026-09-24 |
 | 服务 API major | `1` |
-| Artifact generation | `7` |
+| Artifact generation | `8` |
 | 内置架构 | `darwin-arm64`、`darwin-x86_64` |
-| 审核后的 fork 改动 | 严格的 `TDX_API_PORT`；THS 响应校验；经交叉核验的 qfq 收盘尾部；历史 qfq `end_date` 隔离；代码表就绪门禁 |
+| 审核后的 fork 改动 | 严格的 `TDX_API_PORT`；THS 响应校验；经交叉核验的 qfq 收盘尾部；历史 qfq `end_date` 隔离；代码表就绪门禁；复用启动时有效缓存；交易日只补未缓存日期；北交所 HTTP 请求超时限制 |
 
 源码 fork 跟踪上游，并只保留通用实现。上游项目在 README 中声明使用 MIT
 License。pytdxfeed 自有源码和发布元数据使用 [MIT License](LICENSE)。
